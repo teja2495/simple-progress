@@ -34,11 +34,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.simple_progress.ui.theme.SimpleProgressTheme
@@ -74,6 +81,16 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
     val isRunning by timerViewModel.isRunning.collectAsState()
     val hours by timerViewModel.hours.collectAsState()
     val minutes by timerViewModel.minutes.collectAsState()
+
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    LaunchedEffect(isRunning) {
+        if (!isRunning) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
 
     Scaffold(
             topBar = {
@@ -129,7 +146,9 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                             onValueChange = { timerViewModel.onHoursChanged(it) },
                             label = { Text("Hours") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.width(100.dp)
+                            modifier = Modifier
+                                .width(100.dp)
+                                .focusRequester(focusRequester)
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     OutlinedTextField(
@@ -158,7 +177,10 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
     }
 }
 
-class TimerViewModel : ViewModel() {
+class TimerViewModel(application: Application) : AndroidViewModel(application) {
+    private val sharedPreferences =
+            application.getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
+
     private val _time = MutableStateFlow("00:00:00")
     val time: StateFlow<String> = _time
 
@@ -175,6 +197,10 @@ class TimerViewModel : ViewModel() {
     val minutes: StateFlow<String> = _minutes
 
     private var timerJob: Job? = null
+
+    init {
+        restoreTimerState()
+    }
 
     fun onHoursChanged(newHours: String) {
         if (newHours.all { it.isDigit() }) {
@@ -194,22 +220,29 @@ class TimerViewModel : ViewModel() {
         val totalTimeInMillis = (hoursValue * 3600 + minutesValue * 60) * 1000L
 
         if (totalTimeInMillis > 0) {
-            _isRunning.value = true
-            timerJob =
-                    viewModelScope.launch {
-                        var remainingTimeInMillis = totalTimeInMillis
-                        while (remainingTimeInMillis > 0) {
-                            _time.value = formatTime(remainingTimeInMillis)
-                            _progress.value =
-                                    1 - remainingTimeInMillis.toFloat() / totalTimeInMillis
-                            delay(1000)
-                            remainingTimeInMillis -= 1000
-                        }
-                        _time.value = "Done!"
-                        _progress.value = 1f
-                        _isRunning.value = false
-                    }
+            val endTime = System.currentTimeMillis() + totalTimeInMillis
+            sharedPreferences.edit().putLong("end_time", endTime).apply()
+            sharedPreferences.edit().putLong("total_time", totalTimeInMillis).apply()
+            startCountdown(totalTimeInMillis, totalTimeInMillis)
         }
+    }
+
+    private fun startCountdown(remainingTime: Long, totalTime: Long) {
+        _isRunning.value = true
+        timerJob =
+                viewModelScope.launch {
+                    var remainingTimeInMillis = remainingTime
+                    while (remainingTimeInMillis > 0) {
+                        _time.value = formatTime(remainingTimeInMillis)
+                        _progress.value = 1 - remainingTimeInMillis.toFloat() / totalTime
+                        delay(1000)
+                        remainingTimeInMillis -= 1000
+                    }
+                    _time.value = "Done!"
+                    _progress.value = 1f
+                    _isRunning.value = false
+                    resetTimer()
+                }
     }
 
     fun resetTimer() {
@@ -219,6 +252,16 @@ class TimerViewModel : ViewModel() {
         _isRunning.value = false
         _hours.value = ""
         _minutes.value = ""
+        sharedPreferences.edit().remove("end_time").remove("total_time").apply()
+    }
+
+    private fun restoreTimerState() {
+        val endTime = sharedPreferences.getLong("end_time", 0)
+        val totalTime = sharedPreferences.getLong("total_time", 0)
+        if (endTime > System.currentTimeMillis()) {
+            val remainingTime = endTime - System.currentTimeMillis()
+            startCountdown(remainingTime, totalTime)
+        }
     }
 
     private fun formatTime(millis: Long): String {
