@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -142,8 +143,8 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                         title = { Text("Simple Progress") },
                         colors =
                                 TopAppBarDefaults.topAppBarColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        titleContentColor = MaterialTheme.colorScheme.primary,
+                                        containerColor = MaterialTheme.colorScheme.surface,
+                                        titleContentColor = MaterialTheme.colorScheme.onSurface,
                                 ),
                 )
             }
@@ -152,11 +153,11 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .padding(16.dp)
+                    .padding(top = 20.dp, start = 16.dp, end = 16.dp, bottom = 16.dp)
                     .imePadding()
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
+                verticalArrangement = Arrangement.Top
         ) {
             if (isRunning && timerName.isNotEmpty()) {
                 Text(text = timerName, fontSize = 24.sp)
@@ -177,7 +178,18 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                         Text(text = time, fontSize = 46.sp)
                     }
                     if (isRunning) {
-                        Text(text = "${(progress * 100).toInt()}%", fontSize = 24.sp)
+                        Surface(
+                            modifier = Modifier.padding(top = 8.dp),
+                            shape = RoundedCornerShape(percent = 50),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        ) {
+                            Text(
+                                text = "${(progress * 100).toInt()}%",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                fontSize = 24.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
                     }
                 }
             }
