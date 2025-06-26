@@ -95,13 +95,14 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
     val minutes by timerViewModel.minutes.collectAsState()
     val timerName by timerViewModel.timerName.collectAsState()
 
+    val isFinished = time == "Done!"
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val showDialog = rememberSaveable { mutableStateOf(false) }
     val tempTimerName = rememberSaveable { mutableStateOf("") }
 
-    LaunchedEffect(isRunning) {
-        if (!isRunning) {
+    LaunchedEffect(isRunning, isFinished) {
+        if (!isRunning && !isFinished) {
             focusRequester.requestFocus()
             keyboardController?.show()
         }
@@ -159,9 +160,10 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Top
         ) {
-            if (isRunning && timerName.isNotEmpty()) {
+            if ((isRunning || isFinished) && timerName.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(50.dp))
                 Text(text = timerName, fontSize = 24.sp)
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(60.dp))
             }
             Box(contentAlignment = Alignment.Center) {
                 val animatedProgress by animateFloatAsState(targetValue = progress, label = "")
@@ -196,7 +198,7 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            if (!isRunning) {
+            if (!isRunning && !isFinished) {
                 Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
@@ -225,14 +227,14 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
 
             Button(
                     onClick = {
-                        if (isRunning) {
+                        if (isRunning || isFinished) {
                             timerViewModel.resetTimer()
                         } else {
                             showDialog.value = true
                         }
                     },
                     modifier = Modifier.fillMaxWidth(0.5f)
-            ) { Text(text = if (isRunning) "Reset" else "Start") }
+            ) { Text(text = if (isRunning || isFinished) "Reset" else "Start") }
         }
     }
 }
@@ -317,8 +319,8 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                     _time.value = "Done!"
                     _progress.value = 1f
                     _isRunning.value = false
+                    notificationManager.cancel(1)
                     showDoneNotification()
-                    resetTimer()
                 }
     }
 
@@ -332,6 +334,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _timerName.value = ""
         sharedPreferences.edit().remove("end_time").remove("total_time").remove("timer_name").apply()
         notificationManager.cancel(1)
+        notificationManager.cancel(2)
     }
 
     private fun restoreTimerState() {
