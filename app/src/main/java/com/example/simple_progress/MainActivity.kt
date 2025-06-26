@@ -66,9 +66,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import android.content.BroadcastReceiver
-import android.content.IntentFilter
-import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -268,27 +265,13 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private var timerJob: Job? = null
 
-    private val resetReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "com.example.simple_progress.TIMER_RESET_ACTION") {
-                resetTimer()
-            }
-        }
-    }
-
     init {
         createNotificationChannel()
         restoreTimerState()
-        getApplication<Application>().registerReceiver(
-            resetReceiver,
-            IntentFilter("com.example.simple_progress.TIMER_RESET_ACTION"),
-            ContextCompat.RECEIVER_NOT_EXPORTED
-        )
     }
 
     override fun onCleared() {
         super.onCleared()
-        getApplication<Application>().unregisterReceiver(resetReceiver)
     }
 
     fun onHoursChanged(newHours: String) {
@@ -390,13 +373,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val openAppPendingIntent =
                 PendingIntent.getActivity(getApplication(), 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE)
 
-        val resetIntent = Intent(getApplication(), TimerResetReceiver::class.java).apply {
-            action = "com.example.simple_progress.RESET_TIMER"
-        }
-        val resetPendingIntent = PendingIntent.getBroadcast(
-            getApplication(), 1, resetIntent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         val notification =
                 NotificationCompat.Builder(getApplication(), "timer_channel")
                         .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "")
@@ -405,7 +381,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                         .setProgress(totalTime.toInt(), (totalTime - remainingTime).toInt(), false)
                         .setOngoing(true)
                         .setContentIntent(openAppPendingIntent)
-                        .addAction(android.R.drawable.ic_menu_revert, "Reset", resetPendingIntent)
                         .build()
 
         notificationManager.notify(1, notification)
