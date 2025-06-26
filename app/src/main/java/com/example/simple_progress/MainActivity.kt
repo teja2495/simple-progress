@@ -39,12 +39,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.os.Build
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -81,15 +92,48 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
     val isRunning by timerViewModel.isRunning.collectAsState()
     val hours by timerViewModel.hours.collectAsState()
     val minutes by timerViewModel.minutes.collectAsState()
+    val timerName by timerViewModel.timerName.collectAsState()
 
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val showDialog = rememberSaveable { mutableStateOf(false) }
+    val tempTimerName = rememberSaveable { mutableStateOf("") }
 
     LaunchedEffect(isRunning) {
         if (!isRunning) {
             focusRequester.requestFocus()
             keyboardController?.show()
         }
+    }
+
+    if (showDialog.value) {
+        AlertDialog(
+                onDismissRequest = { showDialog.value = false },
+                title = { Text("Name your timer (Optional)") },
+                text = {
+                    OutlinedTextField(
+                            value = tempTimerName.value,
+                            onValueChange = { tempTimerName.value = it },
+                            label = { Text("Timer Name") })
+                },
+                confirmButton = {
+                    TextButton(
+                            onClick = {
+                                timerViewModel.setTimerName(tempTimerName.value)
+                                timerViewModel.startTimer()
+                                showDialog.value = false
+                            })
+                    { Text("Start") }
+                },
+                dismissButton = {
+                    TextButton(
+                            onClick = {
+                                timerViewModel.startTimer()
+                                showDialog.value = false
+                            })
+                    { Text("Skip") }
+                }
+        )
     }
 
     Scaffold(
@@ -114,6 +158,10 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
         ) {
+            if (isRunning && timerName.isNotEmpty()) {
+                Text(text = timerName, fontSize = 24.sp)
+                Spacer(modifier = Modifier.height(16.dp))
+            }
             Box(contentAlignment = Alignment.Center) {
                 val animatedProgress by animateFloatAsState(targetValue = progress, label = "")
                 CircularProgressIndicator(
@@ -168,7 +216,7 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                         if (isRunning) {
                             timerViewModel.resetTimer()
                         } else {
-                            timerViewModel.startTimer()
+                            showDialog.value = true
                         }
                     },
                     modifier = Modifier.fillMaxWidth(0.5f)
@@ -180,6 +228,8 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val sharedPreferences =
             application.getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
+    private val notificationManager =
+            application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
     private val _time = MutableStateFlow("00:00:00")
     val time: StateFlow<String> = _time
@@ -196,10 +246,18 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val _minutes = MutableStateFlow("")
     val minutes: StateFlow<String> = _minutes
 
+    private val _timerName = MutableStateFlow("")
+    val timerName: StateFlow<String> = _timerName
+
     private var timerJob: Job? = null
 
     init {
+        createNotificationChannel()
         restoreTimerState()
+    }
+
+    override fun onCleared() {
+        super.onCleared()
     }
 
     fun onHoursChanged(newHours: String) {
@@ -212,6 +270,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         if (newMinutes.all { it.isDigit() }) {
             _minutes.value = newMinutes
         }
+    }
+
+    fun setTimerName(name: String) {
+        _timerName.value = name
+        sharedPreferences.edit().putString("timer_name", name).apply()
     }
 
     fun startTimer() {
@@ -235,12 +298,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                     while (remainingTimeInMillis > 0) {
                         _time.value = formatTime(remainingTimeInMillis)
                         _progress.value = 1 - remainingTimeInMillis.toFloat() / totalTime
+                        showNotification(remainingTimeInMillis, totalTime)
                         delay(1000)
                         remainingTimeInMillis -= 1000
                     }
                     _time.value = "Done!"
                     _progress.value = 1f
                     _isRunning.value = false
+                    showDoneNotification()
                     resetTimer()
                 }
     }
@@ -252,13 +317,17 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _isRunning.value = false
         _hours.value = ""
         _minutes.value = ""
-        sharedPreferences.edit().remove("end_time").remove("total_time").apply()
+        _timerName.value = ""
+        sharedPreferences.edit().remove("end_time").remove("total_time").remove("timer_name").apply()
+        notificationManager.cancel(1)
     }
 
     private fun restoreTimerState() {
         val endTime = sharedPreferences.getLong("end_time", 0)
         val totalTime = sharedPreferences.getLong("total_time", 0)
+        val name = sharedPreferences.getString("timer_name", "")
         if (endTime > System.currentTimeMillis()) {
+            _timerName.value = name ?: ""
             val remainingTime = endTime - System.currentTimeMillis()
             startCountdown(remainingTime, totalTime)
         }
@@ -270,5 +339,52 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val minutes = (totalSeconds % 3600) / 60
         val seconds = totalSeconds % 60
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val name = "Timer Notifications"
+            val descriptionText = "Shows the countdown timer progress"
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel = NotificationChannel("timer_channel", name, importance).apply {
+                description = descriptionText
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun showNotification(remainingTime: Long, totalTime: Long) {
+        val openAppIntent = Intent(getApplication(), MainActivity::class.java)
+        val openAppPendingIntent =
+                PendingIntent.getActivity(getApplication(), 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification =
+                NotificationCompat.Builder(getApplication(), "timer_channel")
+                        .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "")
+                        .setContentText("${formatTime(remainingTime)} - ${(progress.value * 100).toInt()}%")
+                        .setSmallIcon(R.drawable.ic_launcher_foreground)
+                        .setProgress(totalTime.toInt(), (totalTime - remainingTime).toInt(), false)
+                        .setOngoing(true)
+                        .setContentIntent(openAppPendingIntent)
+                        .build()
+
+        notificationManager.notify(1, notification)
+    }
+
+    private fun showDoneNotification() {
+        val openAppIntent = Intent(getApplication(), MainActivity::class.java)
+        val openAppPendingIntent =
+                PendingIntent.getActivity(getApplication(), 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification =
+                NotificationCompat.Builder(getApplication(), "timer_channel")
+                        .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "Simple Progress")
+                        .setContentText("Timer is done!")
+                        .setSmallIcon(R.drawable.ic_launcher_foreground)
+                        .setContentIntent(openAppPendingIntent)
+                        .setAutoCancel(true)
+                        .build()
+
+        notificationManager.notify(2, notification)
     }
 }
