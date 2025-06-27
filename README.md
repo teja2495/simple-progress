@@ -53,12 +53,6 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 3. Minimize the app—the ongoing notification shows a determinate progress bar and the remaining time.
 4. When finished, a silent "Timer is done!" notification appears.
 
-## Screenshots _(coming soon)_
-
-| Light | Dark |
-|-------|------|
-| _TBD_ | _TBD_ |
-
 ## Architecture
 
 The core logic lives in `TimerViewModel`, leveraging Kotlin Coroutines and `StateFlow` to drive both the Compose UI and a low-importance notification channel. All UI components are written in Jetpack Compose, Material 3.
