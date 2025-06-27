@@ -10,7 +10,6 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 > - When you're on a flight, If you start the timer after takeoff, you can track the flight progress. Some flights show this on a screen, but not all of them do.
 > - When you watch a movie in a theater, you can set the movie's duration and start the timer when it begins. The progress bar in your notifications will show how much of the movie is left.
 >
->Do you want me to publish the code & apk on github?
 
 ## Features
 
