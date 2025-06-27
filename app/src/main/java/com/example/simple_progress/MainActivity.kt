@@ -369,36 +369,50 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun showNotification(remainingTime: Long, totalTime: Long) {
-        val openAppIntent = Intent(getApplication(), MainActivity::class.java)
-        val openAppPendingIntent =
-                PendingIntent.getActivity(getApplication(), 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE)
+        val openAppIntent = Intent(getApplication(), MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
 
-        val notification =
-                NotificationCompat.Builder(getApplication(), "timer_channel")
-                        .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "")
-                        .setContentText("${formatTime(remainingTime)} - ${(progress.value * 100).toInt()}%")
-                        .setSmallIcon(R.drawable.ic_launcher_foreground)
-                        .setProgress(totalTime.toInt(), (totalTime - remainingTime).toInt(), false)
-                        .setOngoing(true)
-                        .setContentIntent(openAppPendingIntent)
-                        .build()
+        val openAppPendingIntent = PendingIntent.getActivity(
+            getApplication(),
+            0,
+            openAppIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(getApplication(), "timer_channel")
+            .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "")
+            .setContentText("${formatTime(remainingTime)} - ${(progress.value * 100).toInt()}%")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOnlyAlertOnce(true)
+            .setProgress(totalTime.toInt(), (totalTime - remainingTime).toInt(), false)
+            .setOngoing(true)
+            .setContentIntent(openAppPendingIntent)
+            .build()
 
         notificationManager.notify(1, notification)
     }
 
     private fun showDoneNotification() {
-        val openAppIntent = Intent(getApplication(), MainActivity::class.java)
-        val openAppPendingIntent =
-                PendingIntent.getActivity(getApplication(), 0, openAppIntent, PendingIntent.FLAG_IMMUTABLE)
+        val doneIntent = Intent(getApplication(), MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
 
-        val notification =
-                NotificationCompat.Builder(getApplication(), "timer_channel")
-                        .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "Simple Progress")
-                        .setContentText("Timer is done!")
-                        .setSmallIcon(R.drawable.ic_launcher_foreground)
-                        .setContentIntent(openAppPendingIntent)
-                        .setAutoCancel(true)
-                        .build()
+        val donePendingIntent = PendingIntent.getActivity(
+            getApplication(),
+            0,
+            doneIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = NotificationCompat.Builder(getApplication(), "timer_channel")
+            .setContentTitle(if (timerName.value.isNotEmpty()) timerName.value else "Simple Progress")
+            .setContentText("Timer is done!")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(donePendingIntent)
+            .setAutoCancel(true)
+            .build()
 
         notificationManager.notify(2, notification)
     }
