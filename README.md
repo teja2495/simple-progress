@@ -55,9 +55,9 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 ## Screenshots
 
-| Notification progress | In-app progress | Home screen |
-|-----------------------|-----------------|-------------|
-| ![Notification screenshot](screenshots/notification.jpg) | ![In-app progress screenshot](screenshots/in-progress-view.jpg) | ![Home screen screenshot](screenshots/homescreen.jpg) |
+| Home screen | In-app progress | Notification progress |
+|-------------|-----------------|-----------------------|
+| ![Home screen screenshot](screenshots/homescreen.jpg) | ![In-app progress screenshot](screenshots/in-progress-view.jpg) | ![Notification screenshot](screenshots/notification.jpg) |
 
 ## Architecture
 
