@@ -10,6 +10,8 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.simple_progress.utils.getDefaultTargetHour
+import com.example.simple_progress.utils.getDefaultTargetMinute
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,17 +20,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
-private fun getDefaultTargetHour(): Int {
-    val calendar = Calendar.getInstance()
-    calendar.add(Calendar.MINUTE, 15) // Add 15 minutes to current time
-    return calendar.get(Calendar.HOUR_OF_DAY)
-}
-
-private fun getDefaultTargetMinute(): Int {
-    val calendar = Calendar.getInstance()
-    calendar.add(Calendar.MINUTE, 15) // Add 15 minutes to current time
-    return calendar.get(Calendar.MINUTE)
-}
+// ============================================================================
+// DATA CLASSES AND CONSTANTS
+// ============================================================================
 
 data class TimerState(
     val timeRemaining: String = "00:00:00",
@@ -43,6 +37,10 @@ data class TimerState(
     val targetHour: Int = getDefaultTargetHour(),
     val targetMinute: Int = getDefaultTargetMinute()
 )
+
+// ============================================================================
+// MAIN VIEW MODEL CLASS
+// ============================================================================
 
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
@@ -59,6 +57,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         restoreTimerState()
     }
     
+    // ============================================================================
+    // PUBLIC API METHODS
+    // ============================================================================
+    
     fun updateHours(hours: Int) {
         if (hours in 0..24) {
             _uiState.value = _uiState.value.copy(hours = hours)
@@ -73,10 +75,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     
     fun updateTimerName(name: String) {
         _uiState.value = _uiState.value.copy(timerName = name)
-        // Save the timer name to persistent storage
-        sharedPreferences.edit()
-            .putString(KEY_TIMER_NAME, name)
-            .apply()
+        saveTimerName(name)
     }
     
     fun setTimerMode(mode: String) {
@@ -128,9 +127,12 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             targetMinute = getDefaultTargetMinute()
         )
         clearTimerState()
-        notificationManager.cancel(TIMER_NOTIFICATION_ID)
-        notificationManager.cancel(DONE_NOTIFICATION_ID)
+        clearNotifications()
     }
+    
+    // ============================================================================
+    // TIMER CALCULATION METHODS
+    // ============================================================================
     
     private fun calculateDurationTime(): Long {
         val currentState = _uiState.value
@@ -153,6 +155,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         
         return targetTime.timeInMillis - now.timeInMillis
     }
+    
+    // ============================================================================
+    // COUNTDOWN LOGIC
+    // ============================================================================
     
     private fun startCountdown(remainingTime: Long, totalTime: Long) {
         // Set initial progress to 0 immediately when starting
@@ -196,6 +202,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     
+    // ============================================================================
+    // UTILITY METHODS
+    // ============================================================================
+    
     private fun formatTime(millis: Long): String {
         val totalSeconds = millis / 1000
         val hours = totalSeconds / 3600
@@ -203,6 +213,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val seconds = totalSeconds % 60
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
+    
+    // ============================================================================
+    // PERSISTENCE METHODS
+    // ============================================================================
     
     private fun saveTimerState(endTime: Long, totalTime: Long) {
         sharedPreferences.edit()
@@ -220,6 +234,12 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 .putInt(KEY_TARGET_MINUTE, targetMinute)
                 .apply()
         }
+    }
+    
+    private fun saveTimerName(name: String) {
+        sharedPreferences.edit()
+            .putString(KEY_TIMER_NAME, name)
+            .apply()
     }
     
     private fun clearTimerState() {
@@ -252,6 +272,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             startCountdown(remainingTime, totalTime)
         }
     }
+    
+    // ============================================================================
+    // NOTIFICATION METHODS
+    // ============================================================================
     
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -301,6 +325,15 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         
         notificationManager.notify(DONE_NOTIFICATION_ID, notification)
     }
+    
+    private fun clearNotifications() {
+        notificationManager.cancel(TIMER_NOTIFICATION_ID)
+        notificationManager.cancel(DONE_NOTIFICATION_ID)
+    }
+    
+    // ============================================================================
+    // COMPANION OBJECT - CONSTANTS
+    // ============================================================================
     
     companion object {
         private const val CHANNEL_ID = "timer_channel"
