@@ -393,15 +393,16 @@ fun UnifiedTimeInput(
                 if (timerMode == "target_time") {
                     Column(
                         modifier = Modifier.weight(0.5f),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        
+                        Spacer(modifier = Modifier.height(50.dp))
                         Card(
-                            modifier = Modifier.width(60.dp),
+                            modifier = Modifier.width(40.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceVariant
                             ),
-                            shape = RoundedCornerShape(20.dp)
+                            shape = RoundedCornerShape(12.dp)
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally
@@ -413,7 +414,7 @@ fun UnifiedTimeInput(
                                         .background(
                                             if (isAM) MaterialTheme.colorScheme.primaryContainer 
                                             else MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                                            shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
                                         )
                                         .clickable {
                                             val currentHour12 = when (targetHour) {
@@ -424,12 +425,12 @@ fun UnifiedTimeInput(
                                             }
                                             onTargetTimeChanged(currentHour12, targetMinute)
                                         }
-                                        .padding(vertical = 8.dp),
+                                        .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         "AM",
-                                        fontSize = 12.sp,
+                                        fontSize = 8.sp,
                                         fontWeight = if (isAM) FontWeight.Bold else FontWeight.Normal,
                                         color = if (isAM) MaterialTheme.colorScheme.onPrimaryContainer 
                                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
@@ -449,7 +450,7 @@ fun UnifiedTimeInput(
                                         .background(
                                             if (!isAM) MaterialTheme.colorScheme.primaryContainer 
                                             else MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)
+                                            shape = RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
                                         )
                                         .clickable {
                                             val currentHour12 = when (targetHour) {
@@ -460,12 +461,12 @@ fun UnifiedTimeInput(
                                             }
                                             onTargetTimeChanged(currentHour12 + 12, targetMinute)
                                         }
-                                        .padding(vertical = 8.dp),
+                                        .padding(vertical = 4.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
                                         "PM",
-                                        fontSize = 12.sp,
+                                        fontSize = 8.sp,
                                         fontWeight = if (!isAM) FontWeight.Bold else FontWeight.Normal,
                                         color = if (!isAM) MaterialTheme.colorScheme.onPrimaryContainer 
                                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
