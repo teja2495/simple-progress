@@ -70,6 +70,23 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import androidx.compose.material3.TimePicker
+import androidx.compose.material3.TimePickerState
+import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.font.FontWeight
+import java.util.Calendar
+import java.util.Date
 
 class MainActivity : ComponentActivity() {
     
@@ -126,12 +143,16 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
     val hours by timerViewModel.hours.collectAsState()
     val minutes by timerViewModel.minutes.collectAsState()
     val timerName by timerViewModel.timerName.collectAsState()
+    val timerMode by timerViewModel.timerMode.collectAsState()
+    val targetHour by timerViewModel.targetHour.collectAsState()
+    val targetMinute by timerViewModel.targetMinute.collectAsState()
 
     val isFinished = time == "Done!"
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
     val showDialog = rememberSaveable { mutableStateOf(false) }
     val tempTimerName = rememberSaveable { mutableStateOf("") }
+    val showTimePickerDialog = rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(isRunning, isFinished) {
         if (!isRunning && !isFinished) {
@@ -167,6 +188,41 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                             })
                     { Text("Skip") }
                 }
+        )
+    }
+
+    if (showTimePickerDialog.value) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = targetHour,
+            initialMinute = targetMinute
+        )
+        
+        AlertDialog(
+            onDismissRequest = { showTimePickerDialog.value = false },
+            title = { Text("Set Target Time") },
+            text = {
+                TimePicker(
+                    state = timePickerState,
+                    modifier = Modifier.padding(16.dp)
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        timerViewModel.setTargetTime(timePickerState.hour, timePickerState.minute)
+                        showTimePickerDialog.value = false
+                    }
+                ) {
+                    Text("Set")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showTimePickerDialog.value = false }
+                ) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
@@ -208,10 +264,15 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     if (time == "Done!") {
                         Text(text = time, fontSize = 32.sp)
-                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { timerViewModel.resetTimer() },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) { 
+                            Text("Reset") 
+                        }
+                    } else if (isRunning) {
                         Text(text = time, fontSize = 46.sp)
-                    }
-                    if (isRunning) {
                         Surface(
                             modifier = Modifier.padding(top = 8.dp),
                             shape = RoundedCornerShape(percent = 50),
@@ -224,6 +285,20 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
                                 color = MaterialTheme.colorScheme.primary,
                             )
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Button(
+                            onClick = { timerViewModel.resetTimer() },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) { 
+                            Text("Reset") 
+                        }
+                    } else {
+                        Button(
+                            onClick = { showDialog.value = true },
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        ) { 
+                            Text("Start") 
+                        }
                     }
                 }
             }
@@ -231,42 +306,99 @@ fun TimerScreen(timerViewModel: TimerViewModel = viewModel()) {
             Spacer(modifier = Modifier.height(32.dp))
 
             if (!isRunning && !isFinished) {
+                // Mode selection chips
                 Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedTextField(
-                            value = hours,
-                            onValueChange = { timerViewModel.onHoursChanged(it) },
-                            label = { Text("Hours") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    FilterChip(
+                        selected = timerMode == "hours",
+                        onClick = { timerViewModel.setTimerMode("hours") },
+                        label = { Text("Hours") },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                    FilterChip(
+                        selected = timerMode == "time",
+                        onClick = { timerViewModel.setTimerMode("time") },
+                        label = { Text("Time") },
+                        modifier = Modifier.weight(1f),
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    )
+                }
+
+                if (timerMode == "time") {
+                    // Time picker display
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        )
+                    ) {
+                        Column(
                             modifier = Modifier
-                                .width(100.dp)
-                                .focusRequester(focusRequester)
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    OutlinedTextField(
-                            value = minutes,
-                            onValueChange = { timerViewModel.onMinutesChanged(it) },
-                            label = { Text("Minutes") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.width(100.dp)
-                    )
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Target Time",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = String.format("%02d:%02d", targetHour, targetMinute),
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { showTimePickerDialog.value = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Change Time")
+                            }
+                        }
+                    }
+                } else if (timerMode == "hours") {
+                    // Duration input fields
+                    Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                    ) {
+                        OutlinedTextField(
+                                value = hours,
+                                onValueChange = { timerViewModel.onHoursChanged(it) },
+                                label = { Text("Hours") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier
+                                    .width(100.dp)
+                                    .focusRequester(focusRequester)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        OutlinedTextField(
+                                value = minutes,
+                                onValueChange = { timerViewModel.onMinutesChanged(it) },
+                                label = { Text("Minutes") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.width(100.dp)
+                        )
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                    onClick = {
-                        if (isRunning || isFinished) {
-                            timerViewModel.resetTimer()
-                        } else {
-                            showDialog.value = true
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(0.5f)
-            ) { Text(text = if (isRunning || isFinished) "Reset" else "Start") }
         }
     }
 }
@@ -294,6 +426,15 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _timerName = MutableStateFlow("")
     val timerName: StateFlow<String> = _timerName
+
+    private val _timerMode = MutableStateFlow("hours") // "hours" or "time"
+    val timerMode: StateFlow<String> = _timerMode
+
+    private val _targetHour = MutableStateFlow(0)
+    val targetHour: StateFlow<Int> = _targetHour
+
+    private val _targetMinute = MutableStateFlow(0)
+    val targetMinute: StateFlow<Int> = _targetMinute
 
     private var timerJob: Job? = null
 
@@ -323,10 +464,26 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         sharedPreferences.edit().putString("timer_name", name).apply()
     }
 
+    fun setTimerMode(mode: String) {
+        _timerMode.value = mode
+        sharedPreferences.edit().putString("timer_mode", mode).apply()
+    }
+
+    fun setTargetTime(hour: Int, minute: Int) {
+        _targetHour.value = hour
+        _targetMinute.value = minute
+        sharedPreferences.edit().putInt("target_hour", hour).apply()
+        sharedPreferences.edit().putInt("target_minute", minute).apply()
+    }
+
     fun startTimer() {
-        val hoursValue = _hours.value.toIntOrNull() ?: 0
-        val minutesValue = _minutes.value.toIntOrNull() ?: 0
-        val totalTimeInMillis = (hoursValue * 3600 + minutesValue * 60) * 1000L
+        val totalTimeInMillis = if (_timerMode.value == "time") {
+            calculateTimeToTarget()
+        } else {
+            val hoursValue = _hours.value.toIntOrNull() ?: 0
+            val minutesValue = _minutes.value.toIntOrNull() ?: 0
+            (hoursValue * 3600 + minutesValue * 60) * 1000L
+        }
 
         if (totalTimeInMillis > 0) {
             val endTime = System.currentTimeMillis() + totalTimeInMillis
@@ -334,6 +491,24 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             sharedPreferences.edit().putLong("total_time", totalTimeInMillis).apply()
             startCountdown(totalTimeInMillis, totalTimeInMillis)
         }
+    }
+
+    private fun calculateTimeToTarget(): Long {
+        val now = Calendar.getInstance()
+        val targetTime = Calendar.getInstance()
+        
+        // Set target time for today
+        targetTime.set(Calendar.HOUR_OF_DAY, _targetHour.value)
+        targetTime.set(Calendar.MINUTE, _targetMinute.value)
+        targetTime.set(Calendar.SECOND, 0)
+        targetTime.set(Calendar.MILLISECOND, 0)
+        
+        // If target time has already passed today, set it for tomorrow
+        if (targetTime.before(now)) {
+            targetTime.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        
+        return targetTime.timeInMillis - now.timeInMillis
     }
 
     private fun startCountdown(remainingTime: Long, totalTime: Long) {
@@ -364,7 +539,17 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _hours.value = ""
         _minutes.value = ""
         _timerName.value = ""
-        sharedPreferences.edit().remove("end_time").remove("total_time").remove("timer_name").apply()
+        _timerMode.value = "hours"
+        _targetHour.value = 0
+        _targetMinute.value = 0
+        sharedPreferences.edit()
+            .remove("end_time")
+            .remove("total_time")
+            .remove("timer_name")
+            .remove("timer_mode")
+            .remove("target_hour")
+            .remove("target_minute")
+            .apply()
         notificationManager.cancel(1)
         notificationManager.cancel(2)
     }
@@ -373,6 +558,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val endTime = sharedPreferences.getLong("end_time", 0)
         val totalTime = sharedPreferences.getLong("total_time", 0)
         val name = sharedPreferences.getString("timer_name", "")
+        val timerMode = sharedPreferences.getString("timer_mode", "hours") ?: "hours"
+        val targetHour = sharedPreferences.getInt("target_hour", 0)
+        val targetMinute = sharedPreferences.getInt("target_minute", 0)
+        
+        _timerMode.value = timerMode
+        _targetHour.value = targetHour
+        _targetMinute.value = targetMinute
+        
         if (endTime > System.currentTimeMillis()) {
             _timerName.value = name ?: ""
             val remainingTime = endTime - System.currentTimeMillis()
