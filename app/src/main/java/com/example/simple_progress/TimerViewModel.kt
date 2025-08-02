@@ -19,6 +19,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
@@ -57,6 +59,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     init {
         createNotificationChannel()
         restoreTimerState()
+        observeTimerActions() // Add this call
+    }
+    
+    // Add this new method to listen to the event bus
+    private fun observeTimerActions() {
+        TimerActionBus.resetAction
+            .onEach { resetTimer() }
+            .launchIn(viewModelScope)
     }
     
     // ============================================================================
@@ -308,11 +318,19 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             notificationManager.createNotificationChannel(channel)
         }
     }
+
+
     
     private fun showProgressNotification(timeString: String, percentage: Int) {
         val intent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             context, 0, intent, PendingIntent.FLAG_IMMUTABLE
+        )
+        
+        // Create an EXPLICIT reset intent targeting our new receiver
+        val resetIntent = Intent(context, TimerResetReceiver::class.java)
+        val resetPendingIntent = PendingIntent.getBroadcast(
+            context, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -323,6 +341,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setOnlyAlertOnce(true)
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Reset",
+                resetPendingIntent
+            )
             .build()
         
         notificationManager.notify(TIMER_NOTIFICATION_ID, notification)
@@ -334,12 +357,23 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             context, 0, intent, PendingIntent.FLAG_IMMUTABLE
         )
         
+        // Create an EXPLICIT reset intent targeting our new receiver
+        val resetIntent = Intent(context, TimerResetReceiver::class.java)
+        val resetPendingIntent = PendingIntent.getBroadcast(
+            context, 2, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(_uiState.value.timerName.ifEmpty { "Timer Complete" })
             .setContentText("Time's up!")
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
+            .addAction(
+                R.drawable.ic_launcher_foreground,
+                "Reset",
+                resetPendingIntent
+            )
             .build()
         
         notificationManager.notify(DONE_NOTIFICATION_ID, notification)
@@ -348,6 +382,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private fun clearNotifications() {
         notificationManager.cancel(TIMER_NOTIFICATION_ID)
         notificationManager.cancel(DONE_NOTIFICATION_ID)
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
     }
     
     // ============================================================================
