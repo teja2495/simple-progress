@@ -15,8 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
+
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -72,8 +71,7 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val animatedProgress by animateFloatAsState(targetValue = uiState.progress, label = "progress")
     
-    var showNameDialog by remember { mutableStateOf(false) }
-    var tempName by remember { mutableStateOf("") }
+
     
     Scaffold(
         topBar = {
@@ -91,12 +89,10 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 )
                 
                 // Modern Tab Row at the top
-                if (!uiState.isRunning && !uiState.isFinished) {
-                    ModernTimerModeSelector(
-                        selectedMode = uiState.timerMode,
-                        onModeChanged = viewModel::setTimerMode
-                    )
-                }
+                ModernTimerModeSelector(
+                    selectedMode = uiState.timerMode,
+                    onModeChanged = viewModel::setTimerMode
+                )
             }
         }
     ) { paddingValues ->
@@ -129,61 +125,41 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                         )
                     }
             ) {
-                if (uiState.isRunning || uiState.isFinished) {
-                    // Center the timer display when running or finished
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        TimerDisplay(
-                            timeText = uiState.timeRemaining,
-                            progress = animatedProgress,
-                            percentage = uiState.percentage,
-                            isFinished = uiState.isFinished,
-                            isRunning = uiState.isRunning,
-                            timerName = uiState.timerName,
-                            onAddNameClick = { showNameDialog = true }
-                        )
-                    }
-                } else {
-                    // Normal layout when not running
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState()),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Spacer(modifier = Modifier.height(32.dp))
-                        
-                        // Main Timer Display
-                        TimerDisplay(
-                            timeText = uiState.timeRemaining,
-                            progress = animatedProgress,
-                            percentage = uiState.percentage,
-                            isFinished = uiState.isFinished,
-                            isRunning = uiState.isRunning,
-                            timerName = uiState.timerName,
-                            onAddNameClick = null
-                        )
-                        
-                        Spacer(modifier = Modifier.height(24.dp))
-                        
-                        // Timer Controls
-                        UnifiedTimeInput(
-                            timerMode = uiState.timerMode,
-                            hours = uiState.hours,
-                            minutes = uiState.minutes,
-                            targetHour = uiState.targetHour,
-                            targetMinute = uiState.targetMinute,
-                            onHoursChanged = viewModel::updateHours,
-                            onMinutesChanged = viewModel::updateMinutes,
-                            onTargetTimeChanged = viewModel::setTargetTime
-                        )
-                        
-                        // Add space for bottom buttons
-                        Spacer(modifier = Modifier.height(80.dp))
-                    }
+                // Consistent layout regardless of timer state
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    // Main Timer Display
+                    TimerDisplay(
+                        timeText = uiState.timeRemaining,
+                        progress = animatedProgress,
+                        percentage = uiState.percentage,
+                        isFinished = uiState.isFinished,
+                        isRunning = uiState.isRunning,
+                        timerName = uiState.timerName
+                    )
+                    
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // Timer Controls - always show
+                    UnifiedTimeInput(
+                        timerMode = uiState.timerMode,
+                        hours = uiState.hours,
+                        minutes = uiState.minutes,
+                        targetHour = uiState.targetHour,
+                        targetMinute = uiState.targetMinute,
+                        onHoursChanged = viewModel::updateHours,
+                        onMinutesChanged = viewModel::updateMinutes,
+                        onTargetTimeChanged = viewModel::setTargetTime
+                    )
+                    
+                    // Add space for bottom buttons
+                    Spacer(modifier = Modifier.height(80.dp))
                 }
             }
             
@@ -199,23 +175,6 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 timerMode = uiState.timerMode
             )
         }
-    }
-    
-    // Name Dialog
-    if (showNameDialog) {
-        TimerNameDialog(
-            currentName = tempName,
-            onNameChanged = { tempName = it },
-            onConfirm = {
-                viewModel.updateTimerName(tempName)
-                showNameDialog = false
-                tempName = ""
-            },
-            onDismiss = {
-                showNameDialog = false
-                tempName = ""
-            }
-        )
     }
 }
 
@@ -234,37 +193,7 @@ fun TimerDisplay(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.fillMaxWidth()
     ) {
-        // Show timer name when running
-        if (isRunning && timerName.isNotEmpty()) {
-            Text(
-                text = timerName,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                fontWeight = FontWeight.ExtraBold
-            )
-            Spacer(modifier = Modifier.height(65.dp))
-        }
-        
-        // Show "Add Name" pill when running and no name is set
-        if (isRunning && timerName.isEmpty() && onAddNameClick != null) {
-            Card(
-                modifier = Modifier
-                    .padding(bottom = 24.dp)
-                    .clickable { onAddNameClick() },
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-                ),
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text(
-                    text = "Add Name",
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
+        // Timer name and "Add Name" pill removed to keep UI consistent
         
         Box(
             contentAlignment = Alignment.Center,
@@ -661,36 +590,7 @@ fun TimeInputCard(
     }
 }
 
-@Composable
-fun TimerNameDialog(
-    currentName: String,
-    onNameChanged: (String) -> Unit,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Name Your Timer") },
-        text = {
-            OutlinedTextField(
-                value = currentName,
-                onValueChange = onNameChanged,
-                label = { Text("Timer Name (Optional)") },
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) {
-                Text("Start")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Skip")
-            }
-        }
-    )
-}
+
 
 
 
