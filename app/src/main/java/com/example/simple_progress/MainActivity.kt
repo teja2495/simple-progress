@@ -176,17 +176,20 @@ fun TimerContent(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 24.dp)
-                .pointerInput(Unit) {
+                .pointerInput(uiState.timerMode) {
+                    var totalDrag = 0f
                     detectHorizontalDragGestures(
-                        onDragEnd = { },
-                        onHorizontalDrag = { _, dragAmount ->
-                            if (dragAmount > 50) {
-                                // Swipe right - switch to duration
+                        onDragStart = { totalDrag = 0f },
+                        onHorizontalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                        onDragEnd = {
+                            val dragThreshold = 50f
+                            if (totalDrag > dragThreshold) {
+                                // Swiped right: Switch to duration mode
                                 if (uiState.timerMode == "target_time") {
                                     onModeChanged("duration")
                                 }
-                            } else if (dragAmount < -50) {
-                                // Swipe left - switch to target time
+                            } else if (totalDrag < -dragThreshold) {
+                                // Swiped left: Switch to target time mode
                                 if (uiState.timerMode == "duration") {
                                     onModeChanged("target_time")
                                 }
