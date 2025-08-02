@@ -2,12 +2,14 @@ package com.example.simple_progress.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -129,11 +131,41 @@ fun TimeInputCard(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
-        
+
         Spacer(modifier = Modifier.height(12.dp))
-        
-        TimeDisplayCard(value = value)
-        
+
+        // Box to wrap the display card and apply the swipe gesture
+        Box(
+            modifier = Modifier.pointerInput(isRunning, value, range) {
+                // Gestures are only enabled if the timer is not running
+                if (isRunning) return@pointerInput
+
+                var totalDrag = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onVerticalDrag = { _, dragAmount -> totalDrag += dragAmount },
+                    onDragEnd = {
+                        val threshold = 50f // Defines how far the user must swipe
+                        
+                        // Swipe Up (increment value)
+                        if (totalDrag < -threshold) {
+                            if (value < range.last) {
+                                onValueChanged(value + 1)
+                            }
+                        } 
+                        // Swipe Down (decrement value)
+                        else if (totalDrag > threshold) {
+                            if (value > range.first) {
+                                onValueChanged(value - 1)
+                            }
+                        }
+                    }
+                )
+            }
+        ) {
+            TimeDisplayCard(value = value)
+        }
+
         Spacer(modifier = Modifier.height(16.dp))
         
         // Compact slider for quick navigation - hide when running
