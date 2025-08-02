@@ -18,6 +18,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
+private fun getDefaultTargetHour(): Int {
+    val calendar = Calendar.getInstance()
+    calendar.add(Calendar.MINUTE, 15) // Add 15 minutes to current time
+    return calendar.get(Calendar.HOUR_OF_DAY)
+}
+
+private fun getDefaultTargetMinute(): Int {
+    val calendar = Calendar.getInstance()
+    calendar.add(Calendar.MINUTE, 15) // Add 15 minutes to current time
+    return calendar.get(Calendar.MINUTE)
+}
+
 data class TimerState(
     val timeRemaining: String = "00:00:00",
     val progress: Float = 0f,
@@ -28,8 +40,8 @@ data class TimerState(
     val minutes: Int = 0,
     val timerName: String = "",
     val timerMode: String = "duration", // "duration" or "target_time"
-    val targetHour: Int = 18, // Default to 6 PM
-    val targetMinute: Int = 0
+    val targetHour: Int = getDefaultTargetHour(),
+    val targetMinute: Int = getDefaultTargetMinute()
 )
 
 class TimerViewModel(application: Application) : AndroidViewModel(application) {
@@ -64,7 +76,19 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     fun setTimerMode(mode: String) {
-        _uiState.value = _uiState.value.copy(timerMode = mode)
+        val currentState = _uiState.value
+        val newState = if (mode == "target_time" && currentState.timerMode != "target_time") {
+            // When switching to target_time mode for the first time, set default target time
+            currentState.copy(
+                timerMode = mode,
+                targetHour = getDefaultTargetHour(),
+                targetMinute = getDefaultTargetMinute()
+            )
+        } else {
+            currentState.copy(timerMode = mode)
+        }
+        
+        _uiState.value = newState
         saveTimerSettings()
     }
     
@@ -198,8 +222,22 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val totalTime = sharedPreferences.getLong(KEY_TOTAL_TIME, 0)
         val timerName = sharedPreferences.getString(KEY_TIMER_NAME, "") ?: ""
         val timerMode = sharedPreferences.getString(KEY_TIMER_MODE, "duration") ?: "duration"
-        val targetHour = sharedPreferences.getInt(KEY_TARGET_HOUR, 18)
-        val targetMinute = sharedPreferences.getInt(KEY_TARGET_MINUTE, 0)
+        
+        // Check if target time was previously saved
+        val hasSavedTargetTime = sharedPreferences.contains(KEY_TARGET_HOUR) && sharedPreferences.contains(KEY_TARGET_MINUTE)
+        
+        // Use dynamic default values for target time (current time + 15 minutes) if no saved time exists
+        val targetHour = if (hasSavedTargetTime) {
+            sharedPreferences.getInt(KEY_TARGET_HOUR, getDefaultTargetHour())
+        } else {
+            getDefaultTargetHour()
+        }
+        
+        val targetMinute = if (hasSavedTargetTime) {
+            sharedPreferences.getInt(KEY_TARGET_MINUTE, getDefaultTargetMinute())
+        } else {
+            getDefaultTargetMinute()
+        }
         
         _uiState.value = _uiState.value.copy(
             timerName = timerName,

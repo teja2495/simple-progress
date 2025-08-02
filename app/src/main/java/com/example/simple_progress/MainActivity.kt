@@ -85,11 +85,6 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                             fontWeight = FontWeight.Bold
                         )
                     },
-                    actions = {
-                        IconButton(onClick = { /* TODO: Add settings */ }) {
-                            Icon(Icons.Default.MoreVert, "More options")
-                        }
-                    },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
                     )
@@ -111,11 +106,10 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 .padding(paddingValues)
         ) {
             // Main content
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 24.dp)
-                    .verticalScroll(rememberScrollState())
                     .pointerInput(Unit) {
                         detectHorizontalDragGestures(
                             onDragEnd = { },
@@ -133,46 +127,76 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                                 }
                             }
                         )
-                    },
-                horizontalAlignment = Alignment.CenterHorizontally
+                    }
             ) {
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                // Main Timer Display
-                TimerDisplay(
-                    timeText = uiState.timeRemaining,
-                    progress = animatedProgress,
-                    percentage = uiState.percentage,
-                    isFinished = uiState.isFinished
-                )
-                
-                Spacer(modifier = Modifier.height(24.dp))
-                
-                // Timer Controls
-                if (!uiState.isRunning && !uiState.isFinished) {
-                    UnifiedTimeInput(
-                        timerMode = uiState.timerMode,
-                        hours = uiState.hours,
-                        minutes = uiState.minutes,
-                        targetHour = uiState.targetHour,
-                        targetMinute = uiState.targetMinute,
-                        onHoursChanged = viewModel::updateHours,
-                        onMinutesChanged = viewModel::updateMinutes,
-                        onTargetTimeChanged = viewModel::setTargetTime
-                    )
+                if (uiState.isRunning || uiState.isFinished) {
+                    // Center the timer display when running or finished
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        TimerDisplay(
+                            timeText = uiState.timeRemaining,
+                            progress = animatedProgress,
+                            percentage = uiState.percentage,
+                            isFinished = uiState.isFinished,
+                            isRunning = uiState.isRunning,
+                            timerName = uiState.timerName,
+                            onAddNameClick = { showNameDialog = true }
+                        )
+                    }
+                } else {
+                    // Normal layout when not running
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(32.dp))
+                        
+                        // Main Timer Display
+                        TimerDisplay(
+                            timeText = uiState.timeRemaining,
+                            progress = animatedProgress,
+                            percentage = uiState.percentage,
+                            isFinished = uiState.isFinished,
+                            isRunning = uiState.isRunning,
+                            timerName = uiState.timerName,
+                            onAddNameClick = null
+                        )
+                        
+                        Spacer(modifier = Modifier.height(24.dp))
+                        
+                        // Timer Controls
+                        UnifiedTimeInput(
+                            timerMode = uiState.timerMode,
+                            hours = uiState.hours,
+                            minutes = uiState.minutes,
+                            targetHour = uiState.targetHour,
+                            targetMinute = uiState.targetMinute,
+                            onHoursChanged = viewModel::updateHours,
+                            onMinutesChanged = viewModel::updateMinutes,
+                            onTargetTimeChanged = viewModel::setTargetTime
+                        )
+                        
+                        // Add space for bottom buttons
+                        Spacer(modifier = Modifier.height(80.dp))
+                    }
                 }
-                
-                // Add space for bottom buttons
-                Spacer(modifier = Modifier.height(80.dp))
             }
             
             // Bottom buttons
             BottomButtons(
                 isRunning = uiState.isRunning,
                 isFinished = uiState.isFinished,
-                onStart = { showNameDialog = true },
+                onStart = { viewModel.startTimer() },
                 onReset = viewModel::resetTimer,
-                modifier = Modifier.align(Alignment.BottomCenter)
+                modifier = Modifier.align(Alignment.BottomCenter),
+                hours = uiState.hours,
+                minutes = uiState.minutes,
+                timerMode = uiState.timerMode
             )
         }
     }
@@ -184,12 +208,10 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
             onNameChanged = { tempName = it },
             onConfirm = {
                 viewModel.updateTimerName(tempName)
-                viewModel.startTimer()
                 showNameDialog = false
                 tempName = ""
             },
             onDismiss = {
-                viewModel.startTimer()
                 showNameDialog = false
                 tempName = ""
             }
@@ -202,39 +224,88 @@ fun TimerDisplay(
     timeText: String,
     progress: Float,
     percentage: Int,
-    isFinished: Boolean
+    isFinished: Boolean,
+    isRunning: Boolean = false,
+    timerName: String = "",
+    modifier: Modifier = Modifier,
+    onAddNameClick: (() -> Unit)? = null
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier.size(280.dp)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.fillMaxWidth()
     ) {
-        CircularProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxSize(),
-            strokeWidth = 16.dp,
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-        
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
+        // Show timer name when running
+        if (isRunning && timerName.isNotEmpty()) {
             Text(
-                text = timeText,
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold
+                text = timerName,
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                fontWeight = FontWeight.ExtraBold
             )
-            
-            if (!isFinished) {
-                Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(65.dp))
+        }
+        
+        // Show "Add Name" pill when running and no name is set
+        if (isRunning && timerName.isEmpty() && onAddNameClick != null) {
+            Card(
+                modifier = Modifier
+                    .padding(bottom = 24.dp)
+                    .clickable { onAddNameClick() },
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                ),
+                shape = RoundedCornerShape(20.dp)
+            ) {
                 Text(
-                    text = "$percentage%",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    text = "Add Name",
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                     fontWeight = FontWeight.Medium
                 )
+            }
+        }
+        
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.size(280.dp)
+        ) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxSize(),
+                strokeWidth = 16.dp,
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant
+            )
+            
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = timeText,
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                if (!isFinished && percentage > 0) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Text(
+                            text = "$percentage%",
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             }
         }
     }
@@ -486,53 +557,46 @@ fun BottomButtons(
     isFinished: Boolean,
     onStart: () -> Unit,
     onReset: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    hours: Int = 0,
+    minutes: Int = 0,
+    timerMode: String = "duration"
 ) {
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(24.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            .padding(24.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            when {
-                isFinished -> {
-                    Button(
-                        onClick = onReset,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text("Reset", fontSize = 16.sp)
-                    }
+        when {
+            isFinished -> {
+                Button(
+                    onClick = onReset,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp)
+                ) {
+                    Text("Reset", fontSize = 16.sp)
                 }
-                isRunning -> {
-                    Button(
-                        onClick = onReset,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Text("Reset", fontSize = 16.sp)
-                    }
+            }
+            isRunning -> {
+                Button(
+                    onClick = onReset,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Reset", fontSize = 16.sp)
                 }
-                else -> {
-                    Button(
-                        onClick = onStart,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(24.dp)
-                    ) {
-                        Text("Start", fontSize = 16.sp)
-                    }
+            }
+            else -> {
+                Button(
+                    onClick = onStart,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(24.dp),
+                    enabled = timerMode == "target_time" || hours > 0 || minutes > 0
+                ) {
+                    Text("Start", fontSize = 16.sp)
                 }
             }
         }
