@@ -155,7 +155,7 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                             // Show Add Name button when running and no name is set
                             Card(
                                 modifier = Modifier
-                                    .padding(bottom = 10.dp)
+                                    .padding(bottom = 30.dp)
                                     .clickable { showNameDialog = true },
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
@@ -344,12 +344,7 @@ fun ModernTab(
             .background(
                 if (isSelected) MaterialTheme.colorScheme.primaryContainer 
                 else MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(
-                    topStart = if (isLeft) 24.dp else 0.dp,
-                    bottomStart = if (isLeft) 24.dp else 0.dp,
-                    topEnd = if (!isLeft) 24.dp else 0.dp,
-                    bottomEnd = if (!isLeft) 24.dp else 0.dp
-                )
+                shape = RoundedCornerShape(24.dp)
             )
             .clickable { onClick() }
             .padding(vertical = 12.dp, horizontal = 16.dp),
