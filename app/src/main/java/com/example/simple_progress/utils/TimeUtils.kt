@@ -26,4 +26,13 @@ fun getDefaultTargetMinute(): Int {
     val calendar = Calendar.getInstance()
     calendar.add(Calendar.MINUTE, 15) // Add 15 minutes to current time
     return calendar.get(Calendar.MINUTE)
+}
+
+// New functions for current time (for time mode default)
+fun getCurrentHour(): Int {
+    return Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+}
+
+fun getCurrentMinute(): Int {
+    return Calendar.getInstance().get(Calendar.MINUTE)
 } 

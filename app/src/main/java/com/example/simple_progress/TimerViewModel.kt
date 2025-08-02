@@ -12,6 +12,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.simple_progress.utils.getDefaultTargetHour
 import com.example.simple_progress.utils.getDefaultTargetMinute
+import com.example.simple_progress.utils.getCurrentHour
+import com.example.simple_progress.utils.getCurrentMinute
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,12 +32,12 @@ data class TimerState(
     val percentage: Int = 0,
     val isRunning: Boolean = false,
     val isFinished: Boolean = false,
-    val hours: Int = 0,
-    val minutes: Int = 0,
+    val hours: Int = 1,
+    val minutes: Int = 30, // Default to 1 hour 30 minutes for duration mode
     val timerName: String = "",
     val timerMode: String = "duration", // "duration" or "target_time"
-    val targetHour: Int = getDefaultTargetHour(),
-    val targetMinute: Int = getDefaultTargetMinute()
+    val targetHour: Int = getCurrentHour(), // Default to current time for time mode
+    val targetMinute: Int = getCurrentMinute() // Default to current time for time mode
 )
 
 // ============================================================================
@@ -80,15 +82,24 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     
     fun setTimerMode(mode: String) {
         val currentState = _uiState.value
-        val newState = if (mode == "target_time" && currentState.timerMode != "target_time") {
-            // When switching to target_time mode for the first time, set default target time
-            currentState.copy(
-                timerMode = mode,
-                targetHour = getDefaultTargetHour(),
-                targetMinute = getDefaultTargetMinute()
-            )
-        } else {
-            currentState.copy(timerMode = mode)
+        val newState = when (mode) {
+            "target_time" -> {
+                // When switching to target_time mode, set current time as default
+                currentState.copy(
+                    timerMode = mode,
+                    targetHour = getCurrentHour(),
+                    targetMinute = getCurrentMinute()
+                )
+            }
+            "duration" -> {
+                // When switching to duration mode, set 1 hour 30 minutes as default
+                currentState.copy(
+                    timerMode = mode,
+                    hours = 1,
+                    minutes = 30
+                )
+            }
+            else -> currentState.copy(timerMode = mode)
         }
         
         _uiState.value = newState
@@ -116,15 +127,19 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     
     fun resetTimer() {
         timerJob?.cancel()
-        _uiState.value = _uiState.value.copy(
+        val currentState = _uiState.value
+        _uiState.value = currentState.copy(
             timeRemaining = "00:00:00",
             progress = 0f,
             percentage = 0,
             isRunning = false,
             isFinished = false,
             timerName = "", // Clear the timer name when resetting
-            targetHour = getDefaultTargetHour(), // Reset target time to 15 minutes from current time
-            targetMinute = getDefaultTargetMinute()
+            // Reset based on current mode
+            hours = if (currentState.timerMode == "duration") 1 else currentState.hours,
+            minutes = if (currentState.timerMode == "duration") 30 else currentState.minutes,
+            targetHour = if (currentState.timerMode == "target_time") getCurrentHour() else currentState.targetHour,
+            targetMinute = if (currentState.timerMode == "target_time") getCurrentMinute() else currentState.targetMinute
         )
         clearTimerState()
         clearNotifications()
@@ -256,13 +271,17 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val timerName = sharedPreferences.getString(KEY_TIMER_NAME, "") ?: ""
         val timerMode = sharedPreferences.getString(KEY_TIMER_MODE, "duration") ?: "duration"
         
-        // Always use current time + 15 minutes as default target time
-        val targetHour = getDefaultTargetHour()
-        val targetMinute = getDefaultTargetMinute()
+        // Set defaults based on mode
+        val targetHour = if (timerMode == "target_time") getCurrentHour() else getDefaultTargetHour()
+        val targetMinute = if (timerMode == "target_time") getCurrentMinute() else getDefaultTargetMinute()
+        val hours = if (timerMode == "duration") 1 else 0
+        val minutes = if (timerMode == "duration") 30 else 0
         
         _uiState.value = _uiState.value.copy(
             timerName = timerName,
             timerMode = timerMode,
+            hours = hours,
+            minutes = minutes,
             targetHour = targetHour,
             targetMinute = targetMinute
         )

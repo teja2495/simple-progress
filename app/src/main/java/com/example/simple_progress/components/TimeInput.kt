@@ -43,7 +43,7 @@ fun UnifiedTimeInput(
         ) {
             TimeInputCard(
                 label = "Hours",
-                value = timeDisplayData.displayHour,
+                value = if (timerMode == "duration") hours else timeDisplayData.displayHour,
                 range = if (timerMode == "duration") 0..24 else 1..12,
                 onValueChanged = { newValue ->
                     handleHoursChange(

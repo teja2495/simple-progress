@@ -217,7 +217,9 @@ fun TimerContent(
             modifier = Modifier.align(Alignment.BottomCenter),
             hours = uiState.hours,
             minutes = uiState.minutes,
-            timerMode = uiState.timerMode
+            timerMode = uiState.timerMode,
+            targetHour = uiState.targetHour,
+            targetMinute = uiState.targetMinute
         )
     }
 }

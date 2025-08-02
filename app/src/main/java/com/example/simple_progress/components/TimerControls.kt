@@ -25,7 +25,9 @@ fun BottomButtons(
     modifier: Modifier = Modifier,
     hours: Int = 0,
     minutes: Int = 0,
-    timerMode: String = "duration"
+    timerMode: String = "duration",
+    targetHour: Int = 0,
+    targetMinute: Int = 0
 ) {
     Column(
         modifier = modifier
@@ -43,9 +45,20 @@ fun BottomButtons(
                 )
             }
             else -> {
+                val isEnabled = when (timerMode) {
+                    "duration" -> true // Always enabled for duration mode (15 min default)
+                    "target_time" -> {
+                        // For time mode, check if time has been changed from current time
+                        val currentHour = com.example.simple_progress.utils.getCurrentHour()
+                        val currentMinute = com.example.simple_progress.utils.getCurrentMinute()
+                        targetHour != currentHour || targetMinute != currentMinute
+                    }
+                    else -> hours > 0 || minutes > 0
+                }
+                
                 StartButton(
                     onStart = onStart,
-                    isEnabled = timerMode == "target_time" || hours > 0 || minutes > 0
+                    isEnabled = isEnabled
                 )
             }
         }
