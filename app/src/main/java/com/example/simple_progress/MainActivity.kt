@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -556,32 +557,38 @@ fun BottomButtons(
             isFinished -> {
                 Button(
                     onClick = onReset,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp)
                 ) {
-                    Text("Reset", fontSize = 16.sp)
+                    Text("Reset", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
             isRunning -> {
                 Button(
                     onClick = onReset,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.error
                     )
                 ) {
-                    Text("Reset", fontSize = 16.sp)
+                    Text("Reset", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
             else -> {
                 Button(
                     onClick = onStart,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(28.dp),
                     enabled = timerMode == "target_time" || hours > 0 || minutes > 0
                 ) {
-                    Text("Start", fontSize = 16.sp)
+                    Text("Start", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }
