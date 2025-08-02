@@ -71,7 +71,8 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     val animatedProgress by animateFloatAsState(targetValue = uiState.progress, label = "progress")
     
-
+    var showNameDialog by remember { mutableStateOf(false) }
+    var tempName by remember { mutableStateOf("") }
     
     Scaffold(
         topBar = {
@@ -88,11 +89,13 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                     )
                 )
                 
-                // Modern Tab Row at the top
-                ModernTimerModeSelector(
-                    selectedMode = uiState.timerMode,
-                    onModeChanged = viewModel::setTimerMode
-                )
+                // Modern Tab Row at the top - hide when running
+                if (!uiState.isRunning) {
+                    ModernTimerModeSelector(
+                        selectedMode = uiState.timerMode,
+                        onModeChanged = viewModel::setTimerMode
+                    )
+                }
             }
         }
     ) { paddingValues ->
@@ -101,52 +104,87 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Main content
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 24.dp)
-                    .pointerInput(Unit) {
-                        detectHorizontalDragGestures(
-                            onDragEnd = { },
-                            onHorizontalDrag = { _, dragAmount ->
-                                if (dragAmount > 50) {
-                                    // Swipe right - switch to duration
-                                    if (uiState.timerMode == "target_time") {
-                                        viewModel.setTimerMode("duration")
-                                    }
-                                } else if (dragAmount < -50) {
-                                    // Swipe left - switch to target time
-                                    if (uiState.timerMode == "duration") {
-                                        viewModel.setTimerMode("target_time")
-                                    }
-                                }
-                            }
-                        )
-                    }
-            ) {
-                // Consistent layout regardless of timer state
-                Column(
+                            // Main content
+                Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .padding(horizontal = 24.dp)
+                        .pointerInput(Unit) {
+                            detectHorizontalDragGestures(
+                                onDragEnd = { },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    if (dragAmount > 50) {
+                                        // Swipe right - switch to duration
+                                        if (uiState.timerMode == "target_time") {
+                                            viewModel.setTimerMode("duration")
+                                        }
+                                    } else if (dragAmount < -50) {
+                                        // Swipe left - switch to target time
+                                        if (uiState.timerMode == "duration") {
+                                            viewModel.setTimerMode("target_time")
+                                        }
+                                    }
+                                }
+                            )
+                        }
                 ) {
-                    Spacer(modifier = Modifier.height(32.dp))
-                    
-                    // Main Timer Display
-                    TimerDisplay(
-                        timeText = uiState.timeRemaining,
-                        progress = animatedProgress,
-                        percentage = uiState.percentage,
-                        isFinished = uiState.isFinished,
-                        isRunning = uiState.isRunning,
-                        timerName = uiState.timerName
-                    )
+                    // Consistent layout regardless of timer state
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState()),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Spacer(modifier = Modifier.height(32.dp))
+                        
+                        // Show timer name or Add Name button above the circular progress bar
+                        if (uiState.timerName.isNotEmpty()) {
+                            // Show clickable name for editing
+                            Text(
+                                text = uiState.timerName,
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.ExtraBold,
+                                modifier = Modifier
+                                    .padding(bottom = 30.dp)
+                                    .clickable { showNameDialog = true }
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                        } else if (uiState.isRunning) {
+                            // Show Add Name button when running and no name is set
+                            Card(
+                                modifier = Modifier
+                                    .padding(bottom = 10.dp)
+                                    .clickable { showNameDialog = true },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
+                                ),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Text(
+                                    text = "Add Name",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                        }
+                        
+                        // Main Timer Display
+                        TimerDisplay(
+                            timeText = uiState.timeRemaining,
+                            progress = animatedProgress,
+                            percentage = uiState.percentage,
+                            isFinished = uiState.isFinished,
+                            isRunning = uiState.isRunning,
+                            timerName = "" // Don't show name in TimerDisplay since we moved it up
+                        )
                     
                     Spacer(modifier = Modifier.height(24.dp))
                     
-                    // Timer Controls - always show
+                    // Timer Controls - always show, but sliders hidden when running
                     UnifiedTimeInput(
                         timerMode = uiState.timerMode,
                         hours = uiState.hours,
@@ -155,7 +193,8 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                         targetMinute = uiState.targetMinute,
                         onHoursChanged = viewModel::updateHours,
                         onMinutesChanged = viewModel::updateMinutes,
-                        onTargetTimeChanged = viewModel::setTargetTime
+                        onTargetTimeChanged = viewModel::setTargetTime,
+                        isRunning = uiState.isRunning
                     )
                     
                     // Add space for bottom buttons
@@ -176,6 +215,23 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
             )
         }
     }
+    
+    // Name Dialog
+    if (showNameDialog) {
+        TimerNameDialog(
+            currentName = if (tempName.isEmpty()) uiState.timerName else tempName,
+            onNameChanged = { tempName = it },
+            onConfirm = {
+                viewModel.updateTimerName(tempName)
+                showNameDialog = false
+                tempName = ""
+            },
+            onDismiss = {
+                showNameDialog = false
+                tempName = ""
+            }
+        )
+    }
 }
 
 @Composable
@@ -186,15 +242,12 @@ fun TimerDisplay(
     isFinished: Boolean,
     isRunning: Boolean = false,
     timerName: String = "",
-    modifier: Modifier = Modifier,
-    onAddNameClick: (() -> Unit)? = null
+    modifier: Modifier = Modifier
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.fillMaxWidth()
     ) {
-        // Timer name and "Add Name" pill removed to keep UI consistent
-        
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier.size(280.dp)
@@ -218,7 +271,7 @@ fun TimerDisplay(
                     fontWeight = FontWeight.Bold
                 )
                 
-                if (!isFinished && percentage > 0) {
+                if (!isFinished && isRunning) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Card(
                         colors = CardDefaults.cardColors(
@@ -323,7 +376,8 @@ fun UnifiedTimeInput(
     targetMinute: Int,
     onHoursChanged: (Int) -> Unit,
     onMinutesChanged: (Int) -> Unit,
-    onTargetTimeChanged: (Int, Int) -> Unit
+    onTargetTimeChanged: (Int, Int) -> Unit,
+    isRunning: Boolean = false
 ) {
     // Convert 24-hour to 12-hour for display in target time mode
     val displayHour = if (timerMode == "target_time") {
@@ -372,7 +426,8 @@ fun UnifiedTimeInput(
                             onTargetTimeChanged(adjustedHour, targetMinute)
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    isRunning = isRunning
                 )
                 
                 TimeInputCard(
@@ -386,7 +441,8 @@ fun UnifiedTimeInput(
                             onTargetTimeChanged(targetHour, newValue)
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    isRunning = isRunning
                 )
                 
                 // Compact AM/PM selector for target time mode
@@ -538,7 +594,8 @@ fun TimeInputCard(
     value: Int,
     range: IntRange,
     onValueChanged: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isRunning: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -579,20 +636,52 @@ fun TimeInputCard(
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Compact slider for quick navigation
-        Slider(
-            value = value.toFloat(),
-            onValueChange = { onValueChanged(it.toInt()) },
-            valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = range.count() - 2,
-            modifier = Modifier.fillMaxWidth()
-        )
+        // Compact slider for quick navigation - hide when running
+        if (!isRunning) {
+            Slider(
+                value = value.toFloat(),
+                onValueChange = { onValueChanged(it.toInt()) },
+                valueRange = range.first.toFloat()..range.last.toFloat(),
+                steps = range.count() - 2,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
     }
 }
 
 
 
 
+
+@Composable
+fun TimerNameDialog(
+    currentName: String,
+    onNameChanged: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Set Timer Name") },
+        text = {
+            OutlinedTextField(
+                value = currentName,
+                onValueChange = onNameChanged,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
 
 private fun formatTime12Hour(hour: Int, minute: Int): String {
     val calendar = Calendar.getInstance().apply {

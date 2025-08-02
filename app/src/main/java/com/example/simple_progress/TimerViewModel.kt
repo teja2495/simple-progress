@@ -73,6 +73,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     
     fun updateTimerName(name: String) {
         _uiState.value = _uiState.value.copy(timerName = name)
+        // Save the timer name to persistent storage
+        sharedPreferences.edit()
+            .putString(KEY_TIMER_NAME, name)
+            .apply()
     }
     
     fun setTimerMode(mode: String) {
@@ -118,7 +122,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             progress = 0f,
             percentage = 0,
             isRunning = false,
-            isFinished = false
+            isFinished = false,
+            timerName = "", // Clear the timer name when resetting
+            targetHour = getDefaultTargetHour(), // Reset target time to 15 minutes from current time
+            targetMinute = getDefaultTargetMinute()
         )
         clearTimerState()
         notificationManager.cancel(TIMER_NOTIFICATION_ID)
@@ -148,7 +155,13 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     private fun startCountdown(remainingTime: Long, totalTime: Long) {
-        _uiState.value = _uiState.value.copy(isRunning = true, isFinished = false)
+        // Set initial progress to 0 immediately when starting
+        _uiState.value = _uiState.value.copy(
+            isRunning = true, 
+            isFinished = false,
+            progress = 0f,
+            percentage = 0
+        )
         
         timerJob = viewModelScope.launch {
             var timeLeft = remainingTime
@@ -223,21 +236,9 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val timerName = sharedPreferences.getString(KEY_TIMER_NAME, "") ?: ""
         val timerMode = sharedPreferences.getString(KEY_TIMER_MODE, "duration") ?: "duration"
         
-        // Check if target time was previously saved
-        val hasSavedTargetTime = sharedPreferences.contains(KEY_TARGET_HOUR) && sharedPreferences.contains(KEY_TARGET_MINUTE)
-        
-        // Use dynamic default values for target time (current time + 15 minutes) if no saved time exists
-        val targetHour = if (hasSavedTargetTime) {
-            sharedPreferences.getInt(KEY_TARGET_HOUR, getDefaultTargetHour())
-        } else {
-            getDefaultTargetHour()
-        }
-        
-        val targetMinute = if (hasSavedTargetTime) {
-            sharedPreferences.getInt(KEY_TARGET_MINUTE, getDefaultTargetMinute())
-        } else {
-            getDefaultTargetMinute()
-        }
+        // Always use current time + 15 minutes as default target time
+        val targetHour = getDefaultTargetHour()
+        val targetMinute = getDefaultTargetMinute()
         
         _uiState.value = _uiState.value.copy(
             timerName = timerName,
