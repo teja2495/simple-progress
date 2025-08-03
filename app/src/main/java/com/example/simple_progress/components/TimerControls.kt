@@ -2,17 +2,25 @@ package com.example.simple_progress.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 
 // ============================================================================
 // BOTTOM BUTTONS COMPONENTS
@@ -211,11 +219,38 @@ fun TimeSlider(
     onValueChange: (Float) -> Unit,
     range: IntRange
 ) {
-    Slider(
-        value = value,
-        onValueChange = onValueChange,
-        valueRange = range.first.toFloat()..range.last.toFloat(),
-        steps = range.count() - 2,
-        modifier = Modifier.fillMaxWidth()
-    )
+    val valueRange = range.first.toFloat()..range.last.toFloat()
+    
+    // Enhanced touch area wrapper
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp) // Increased padding for better touch area
+            .pointerInput(value) {
+                // Add additional touch handling for edge cases
+                detectTapGestures(
+                    onTap = { offset ->
+                        // Calculate the position and update value accordingly
+                        val width = size.width
+                        val position = offset.x / width
+                        val newValue = range.first + (position * (range.last - range.first))
+                        onValueChange(newValue.coerceIn(range.first.toFloat(), range.last.toFloat()))
+                    }
+                )
+            }
+    ) {
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = range.count() - 2,
+            modifier = Modifier.fillMaxWidth(),
+            // Enhanced visual feedback for better touch experience
+            colors = SliderDefaults.colors(
+                thumbColor = MaterialTheme.colorScheme.primary,
+                activeTrackColor = MaterialTheme.colorScheme.primary,
+                inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+            )
+        )
+    }
 } 
