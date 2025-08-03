@@ -118,7 +118,8 @@ fun TimeInputCard(
     range: IntRange,
     onValueChanged: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    isRunning: Boolean = false
+    isRunning: Boolean = false,
+    isFinished: Boolean = false
 ) {
     Column(
         modifier = modifier
@@ -168,8 +169,8 @@ fun TimeInputCard(
 
         Spacer(modifier = Modifier.height(16.dp))
         
-        // Compact slider for quick navigation - hide when running
-        if (!isRunning) {
+        // Compact slider for quick navigation - hide when running or finished
+        if (!isRunning && !isFinished) {
             TimeSlider(
                 value = value.toFloat(),
                 onValueChange = { onValueChanged(it.toInt()) },

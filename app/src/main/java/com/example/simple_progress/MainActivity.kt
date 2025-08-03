@@ -78,6 +78,7 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
         topBar = {
             TimerTopBar(
                 isRunning = uiState.isRunning,
+                isFinished = uiState.isFinished,
                 timerMode = uiState.timerMode,
                 onModeChanged = viewModel::setTimerMode
             )
@@ -124,6 +125,7 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
 @Composable
 fun TimerTopBar(
     isRunning: Boolean,
+    isFinished: Boolean,
     timerMode: String,
     onModeChanged: (String) -> Unit
 ) {
@@ -140,8 +142,8 @@ fun TimerTopBar(
             )
         )
         
-        // Modern Tab Row at the top - hide when running
-        if (!isRunning) {
+        // Modern Tab Row at the top - hide when running or finished
+        if (!isRunning && !isFinished) {
             ModernTimerModeSelector(
                 selectedMode = timerMode,
                 onModeChanged = onModeChanged
@@ -260,7 +262,7 @@ fun TimerMainContent(
     
         Spacer(modifier = Modifier.height(24.dp))
         
-        // Timer Controls - always show, but sliders hidden when running
+        // Timer Controls - hide when finished, sliders hidden when running
         UnifiedTimeInput(
             timerMode = uiState.timerMode,
             hours = uiState.hours,
@@ -270,7 +272,8 @@ fun TimerMainContent(
             onHoursChanged = onHoursChanged,
             onMinutesChanged = onMinutesChanged,
             onTargetTimeChanged = onTargetTimeChanged,
-            isRunning = uiState.isRunning
+            isRunning = uiState.isRunning,
+            isFinished = uiState.isFinished
         )
         
         // Add space for bottom buttons

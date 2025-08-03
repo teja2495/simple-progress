@@ -223,6 +223,8 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             )
             
             clearTimerState()
+            // Clear the progress notification before showing completion notification
+            notificationManager.cancel(TIMER_NOTIFICATION_ID)
             showCompletionNotification()
         }
     }
@@ -336,7 +338,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(_uiState.value.timerName.ifEmpty { "Timer Running" })
-            .setContentText("$timeString remaining ($percentage%)")
+            .setContentText("$timeString - $percentage%")
             .setProgress(100, percentage, false)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
@@ -365,7 +367,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(_uiState.value.timerName.ifEmpty { "Timer Complete" })
+            .setContentTitle(_uiState.value.timerName.ifEmpty { "Progress Complete" })
             .setContentText("Time's up!")
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
@@ -386,6 +388,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     
     override fun onCleared() {
         super.onCleared()
+        clearNotifications()
     }
     
     // ============================================================================

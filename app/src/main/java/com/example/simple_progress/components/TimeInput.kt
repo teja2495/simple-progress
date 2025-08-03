@@ -26,7 +26,8 @@ fun UnifiedTimeInput(
     onHoursChanged: (Int) -> Unit,
     onMinutesChanged: (Int) -> Unit,
     onTargetTimeChanged: (Int, Int) -> Unit,
-    isRunning: Boolean = false
+    isRunning: Boolean = false,
+    isFinished: Boolean = false
 ) {
     val timeDisplayData = getTimeDisplayData(timerMode, targetHour, targetMinute)
     
@@ -57,7 +58,8 @@ fun UnifiedTimeInput(
                     )
                 },
                 modifier = Modifier.weight(1f),
-                isRunning = isRunning
+                isRunning = isRunning,
+                isFinished = isFinished
             )
             
             TimeInputCard(
@@ -72,7 +74,8 @@ fun UnifiedTimeInput(
                     }
                 },
                 modifier = Modifier.weight(1f),
-                isRunning = isRunning
+                isRunning = isRunning,
+                isFinished = isFinished
             )
             
             // Compact AM/PM selector for target time mode
