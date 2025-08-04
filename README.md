@@ -17,6 +17,8 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 • **No sounds, no alarms** – the timer ends silently with a single "done" notification so it never interrupts a movie, a flight, or your focus.
 
+• **Flexible countdown options** – set timers based on duration (hours/minutes) or specific end time for precise scheduling.
+
 • **Label your timers** – optionally name each countdown (e.g. "Flight to JFK" or "Barbie movie").
 
 • **Edge-to-edge Compose UI** – built entirely with Kotlin and Jetpack Compose.
@@ -61,11 +63,14 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 ## Architecture
 
-The core logic lives in `TimerViewModel`, leveraging Kotlin Coroutines and `StateFlow` to drive both the Compose UI and a low-importance notification channel. All UI components are written in Jetpack Compose, Material 3.
+The app follows MVVM architecture with Jetpack Compose:
 
-## Contributing
+• **UI Layer**: Compose components in `components/` package with Material 3 theming
+• **ViewModel Layer**: `TimerViewModel` manages timer state using StateFlow and Coroutines
+• **Data Layer**: `TimerActionBus` handles timer events and `TimerResetReceiver` manages system interactions
+• **Utils**: `TimeUtils` provides time formatting and calculation utilities
 
-Pull requests are welcome! If you have ideas for improvement—vibration patterns, preset durations, Wear OS support—feel free to open an issue first to discuss.
+The core timer logic leverages Kotlin Coroutines for background processing and StateFlow for reactive UI updates. The notification system uses a low-importance channel to display persistent progress without interrupting the user experience.
 
 ## License
 
