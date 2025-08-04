@@ -13,7 +13,7 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 ## Features
 
-• **Persistent notification with progress bar** – see the remaining time and percentage at a glance.
+• **Persistent notification with progress bar** – see the remaining time and percentage at a glance, with a reset button for quick timer control.
 
 • **No sounds, no alarms** – the timer ends silently with a single "done" notification so it never interrupts a movie, a flight, or your focus.
 
