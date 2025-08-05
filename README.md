@@ -29,6 +29,12 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 • **State restoration** – progress is preserved across configuration changes and app restarts.
 
+## Screenshots
+
+| Home screen | In-app progress | Notification progress |
+|-------------|-----------------|-----------------------|
+| ![Home screen screenshot](screenshots/homescreen.jpg) | ![In-app progress screenshot](screenshots/in-progress-view.jpg) | ![Notification screenshot](screenshots/notification.jpg) |
+
 ## Getting Started
 
 ### Requirements
@@ -58,12 +64,6 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 2. Tap **Start** and (optionally) name your timer.
 3. Minimize the app—the ongoing notification shows a determinate progress bar and the remaining time.
 4. When finished, a silent "Timer is done!" notification appears.
-
-## Screenshots
-
-| Home screen | In-app progress | Notification progress |
-|-------------|-----------------|-----------------------|
-| ![Home screen screenshot](screenshots/homescreen.jpg) | ![In-app progress screenshot](screenshots/in-progress-view.jpg) | ![Notification screenshot](screenshots/notification.jpg) |
 
 ## Architecture
 
