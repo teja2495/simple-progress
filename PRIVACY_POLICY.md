@@ -1,6 +1,6 @@
 # Privacy Policy for Simple Progress
 
-**Last updated:** December 2024
+**Last updated:** August 2025
 
 ## Introduction
 
@@ -61,8 +61,7 @@ We may update this Privacy Policy from time to time. We will notify users of any
 ## Contact Information
 
 If you have any questions about this Privacy Policy, please contact us at:
-- Email: [Your contact email]
-- GitHub: [Your GitHub repository URL]
+- Email: tejakarlapudi.apps@gmail.com
 
 ## Legal Basis
 
