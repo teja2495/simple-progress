@@ -3,25 +3,24 @@ package com.example.simple_progress
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.os.Build
-import androidx.core.app.NotificationCompat
+import android.os.IBinder
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.simple_progress.utils.getDefaultTargetHour
 import com.example.simple_progress.utils.getDefaultTargetMinute
 import com.example.simple_progress.utils.getCurrentHour
 import com.example.simple_progress.utils.getCurrentMinute
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
 import java.util.Calendar
 
 // ============================================================================
@@ -54,19 +53,72 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(TimerState())
     val uiState: StateFlow<TimerState> = _uiState.asStateFlow()
     
-    private var timerJob: Job? = null
+    private var timerService: TimerService? = null
+    private var serviceBound = false
+    
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
+            val binder = service as TimerService.TimerBinder
+            timerService = binder.getService()
+            serviceBound = true
+            
+            // Set up callbacks
+            timerService?.onTimerUpdate = { timeString, progress, percentage ->
+                _uiState.value = _uiState.value.copy(
+                    timeRemaining = timeString,
+                    progress = progress,
+                    percentage = percentage
+                )
+            }
+            
+            timerService?.onTimerComplete = {
+                _uiState.value = _uiState.value.copy(
+                    timeRemaining = "Done!",
+                    progress = 1f,
+                    percentage = 100,
+                    isRunning = false,
+                    isFinished = true
+                )
+                clearTimerState()
+                unbindService()
+            }
+        }
+        
+        override fun onServiceDisconnected(name: ComponentName?) {
+            timerService = null
+            serviceBound = false
+        }
+    }
     
     init {
         createNotificationChannel()
         restoreTimerState()
-        observeTimerActions() // Add this call
+        observeTimerActions()
     }
     
-    // Add this new method to listen to the event bus
     private fun observeTimerActions() {
         TimerActionBus.resetAction
             .onEach { resetTimer() }
             .launchIn(viewModelScope)
+    }
+    
+    private fun bindService() {
+        if (!serviceBound) {
+            val intent = Intent(context, TimerService::class.java)
+            context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+        }
+    }
+    
+    private fun unbindService() {
+        if (serviceBound) {
+            try {
+                context.unbindService(serviceConnection)
+            } catch (e: Exception) {
+                // Service already unbound
+            }
+            serviceBound = false
+            timerService = null
+        }
     }
     
     // ============================================================================
@@ -132,11 +184,35 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         
         val endTime = System.currentTimeMillis() + totalTimeInMillis
         saveTimerState(endTime, totalTimeInMillis)
-        startCountdown(totalTimeInMillis, totalTimeInMillis)
+        
+        // Start the foreground service
+        val intent = Intent(context, TimerService::class.java).apply {
+            action = TimerService.ACTION_START_TIMER
+            putExtra(TimerService.EXTRA_REMAINING_TIME, totalTimeInMillis)
+            putExtra(TimerService.EXTRA_TOTAL_TIME, totalTimeInMillis)
+            putExtra(TimerService.EXTRA_TIMER_NAME, _uiState.value.timerName)
+        }
+        
+        ContextCompat.startForegroundService(context, intent)
+        bindService()
+        
+        // Update UI state immediately
+        _uiState.value = _uiState.value.copy(
+            isRunning = true,
+            isFinished = false,
+            progress = 0f,
+            percentage = 0
+        )
     }
     
     fun resetTimer() {
-        timerJob?.cancel()
+        // Stop the service
+        val intent = Intent(context, TimerService::class.java).apply {
+            action = TimerService.ACTION_RESET_TIMER
+        }
+        context.startService(intent)
+        unbindService()
+        
         val currentState = _uiState.value
         _uiState.value = currentState.copy(
             timeRemaining = "00:00:00",
@@ -144,8 +220,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             percentage = 0,
             isRunning = false,
             isFinished = false,
-            timerName = "", // Clear the timer name when resetting
-            // Reset based on current mode
+            timerName = "",
             hours = if (currentState.timerMode == "duration") 1 else currentState.hours,
             minutes = if (currentState.timerMode == "duration") 30 else currentState.minutes,
             targetHour = if (currentState.timerMode == "target_time") getCurrentHour() else currentState.targetHour,
@@ -182,64 +257,12 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     // ============================================================================
-    // COUNTDOWN LOGIC
+    // COUNTDOWN LOGIC (Now handled by TimerService)
     // ============================================================================
-    
-    private fun startCountdown(remainingTime: Long, totalTime: Long) {
-        // Set initial progress to 0 immediately when starting
-        _uiState.value = _uiState.value.copy(
-            isRunning = true, 
-            isFinished = false,
-            progress = 0f,
-            percentage = 0
-        )
-        
-        timerJob = viewModelScope.launch {
-            var timeLeft = remainingTime
-            
-            while (timeLeft > 0) {
-                val timeString = formatTime(timeLeft)
-                val progress = 1 - (timeLeft.toFloat() / totalTime)
-                val percentage = (progress * 100).toInt()
-                
-                _uiState.value = _uiState.value.copy(
-                    timeRemaining = timeString,
-                    progress = progress,
-                    percentage = percentage
-                )
-                
-                showProgressNotification(timeString, percentage)
-                delay(1000)
-                timeLeft -= 1000
-            }
-            
-            // Timer finished
-            _uiState.value = _uiState.value.copy(
-                timeRemaining = "Done!",
-                progress = 1f,
-                percentage = 100,
-                isRunning = false,
-                isFinished = true
-            )
-            
-            clearTimerState()
-            // Clear the progress notification before showing completion notification
-            notificationManager.cancel(TIMER_NOTIFICATION_ID)
-            showCompletionNotification()
-        }
-    }
     
     // ============================================================================
     // UTILITY METHODS
     // ============================================================================
-    
-    private fun formatTime(millis: Long): String {
-        val totalSeconds = millis / 1000
-        val hours = totalSeconds / 3600
-        val minutes = (totalSeconds % 3600) / 60
-        val seconds = totalSeconds % 60
-        return String.format("%02d:%02d:%02d", hours, minutes, seconds)
-    }
     
     // ============================================================================
     // PERSISTENCE METHODS
@@ -300,12 +323,27 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         
         if (endTime > System.currentTimeMillis() && totalTime > 0) {
             val remainingTime = endTime - System.currentTimeMillis()
-            startCountdown(remainingTime, totalTime)
+            
+            // Restart the service with remaining time
+            val intent = Intent(context, TimerService::class.java).apply {
+                action = TimerService.ACTION_START_TIMER
+                putExtra(TimerService.EXTRA_REMAINING_TIME, remainingTime)
+                putExtra(TimerService.EXTRA_TOTAL_TIME, totalTime)
+                putExtra(TimerService.EXTRA_TIMER_NAME, timerName)
+            }
+            
+            ContextCompat.startForegroundService(context, intent)
+            bindService()
+            
+            _uiState.value = _uiState.value.copy(
+                isRunning = true,
+                isFinished = false
+            )
         }
     }
     
     // ============================================================================
-    // NOTIFICATION METHODS
+    // NOTIFICATION METHODS (Now handled by TimerService)
     // ============================================================================
     
     private fun createNotificationChannel() {
@@ -320,66 +358,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             notificationManager.createNotificationChannel(channel)
         }
     }
-
-
-    
-    private fun showProgressNotification(timeString: String, percentage: Int) {
-        val intent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent, PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        // Create an EXPLICIT reset intent targeting our new receiver
-        val resetIntent = Intent(context, TimerResetReceiver::class.java)
-        val resetPendingIntent = PendingIntent.getBroadcast(
-            context, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(_uiState.value.timerName.ifEmpty { "Timer Running" })
-            .setContentText("$timeString - $percentage%")
-            .setProgress(100, percentage, false)
-            .setOngoing(true)
-            .setContentIntent(pendingIntent)
-            .setOnlyAlertOnce(true)
-            .addAction(
-                R.drawable.ic_launcher_foreground,
-                "Reset",
-                resetPendingIntent
-            )
-            .build()
-        
-        notificationManager.notify(TIMER_NOTIFICATION_ID, notification)
-    }
-    
-    private fun showCompletionNotification() {
-        val intent = Intent(context, MainActivity::class.java)
-        val pendingIntent = PendingIntent.getActivity(
-            context, 0, intent, PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        // Create an EXPLICIT reset intent targeting our new receiver
-        val resetIntent = Intent(context, TimerResetReceiver::class.java)
-        val resetPendingIntent = PendingIntent.getBroadcast(
-            context, 2, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(_uiState.value.timerName.ifEmpty { "Progress Complete" })
-            .setContentText("Time's up!")
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .addAction(
-                R.drawable.ic_launcher_foreground,
-                "Reset",
-                resetPendingIntent
-            )
-            .build()
-        
-        notificationManager.notify(DONE_NOTIFICATION_ID, notification)
-    }
     
     private fun clearNotifications() {
         notificationManager.cancel(TIMER_NOTIFICATION_ID)
@@ -388,6 +366,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     
     override fun onCleared() {
         super.onCleared()
+        unbindService()
         clearNotifications()
     }
     
