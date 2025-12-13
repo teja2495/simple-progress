@@ -23,6 +23,8 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 • **Flexible countdown options** – set timers based on duration (hours/minutes) or specific end time for precise scheduling.
 
+• **Timer scheduling** – schedule timers to start automatically at a specific time (up to 24 hours in advance). Perfect for planning ahead—set a timer for your movie start time or flight departure, and it will begin automatically.
+
 • **Label your timers** – optionally name each countdown (e.g. "Flight to JFK" or "Barbie movie").
 
 • **Edge-to-edge Compose UI** – built entirely with Kotlin and Jetpack Compose.
@@ -60,10 +62,21 @@ A minimal, distraction-free countdown timer for Android that keeps you informed 
 
 ## Usage
 
+### Starting a Timer Immediately
+
 1. Enter the desired hours and/or minutes.
 2. Tap **Start** and (optionally) name your timer.
 3. Minimize the app—the ongoing notification shows a determinate progress bar and the remaining time.
 4. When finished, a silent "Timer is done!" notification appears.
+
+### Scheduling a Timer
+
+1. Enter the desired hours and/or minutes for the timer duration.
+2. Tap **Schedule** to open the time picker.
+3. Select the time when you want the timer to start (must be within 24 hours).
+4. Optionally name your scheduled timer.
+5. The timer will automatically start at the scheduled time, even if the app is closed.
+6. View or cancel your scheduled timer from the scheduled timers list.
 
 ## Architecture
 
