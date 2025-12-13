@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +75,13 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
     
     var showNameDialog by remember { mutableStateOf(false) }
     var tempName by remember { mutableStateOf("") }
+    var showScheduleDialog by remember { mutableStateOf(false) }
+    var showScheduledTimersDialog by remember { mutableStateOf(false) }
+    
+    // Check for running timer when screen is displayed
+    LaunchedEffect(Unit) {
+        viewModel.checkAndBindToRunningTimer()
+    }
     
     Scaffold(
         topBar = {
@@ -80,7 +89,9 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 isRunning = uiState.isRunning,
                 isFinished = uiState.isFinished,
                 timerMode = uiState.timerMode,
-                onModeChanged = viewModel::setTimerMode
+                onModeChanged = viewModel::setTimerMode,
+                onScheduledTimersClick = { showScheduledTimersDialog = true },
+                hasScheduledTimer = uiState.isScheduled
             )
         }
     ) { paddingValues ->
@@ -89,7 +100,9 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
             animatedProgress = animatedProgress,
             paddingValues = paddingValues,
             onStart = { viewModel.startTimer() },
+            onSchedule = { showScheduleDialog = true },
             onReset = viewModel::resetTimer,
+            onCancelScheduled = { viewModel.cancelScheduledTimer() },
             onModeChanged = viewModel::setTimerMode,
             onHoursChanged = viewModel::updateHours,
             onMinutesChanged = viewModel::updateMinutes,
@@ -115,6 +128,28 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
             }
         )
     }
+    
+    // Schedule Dialog
+    if (showScheduleDialog) {
+        ScheduleTimerDialog(
+            onDismiss = { showScheduleDialog = false },
+            onSchedule = { hour, minute ->
+                viewModel.scheduleTimer(hour, minute)
+                showScheduleDialog = false
+            }
+        )
+    }
+    
+    // Scheduled Timers List Dialog
+    if (showScheduledTimersDialog) {
+        ScheduledTimersListDialog(
+            scheduledStartTime = if (uiState.isScheduled) uiState.scheduledStartTime else null,
+            scheduledDuration = if (uiState.isScheduled) uiState.scheduledDuration else null,
+            timerName = uiState.timerName,
+            onDismiss = { showScheduledTimersDialog = false },
+            onCancel = if (uiState.isScheduled) { { viewModel.cancelScheduledTimer() } } else null
+        )
+    }
 }
 
 // ============================================================================
@@ -127,7 +162,9 @@ fun TimerTopBar(
     isRunning: Boolean,
     isFinished: Boolean,
     timerMode: String,
-    onModeChanged: (String) -> Unit
+    onModeChanged: (String) -> Unit,
+    onScheduledTimersClick: () -> Unit,
+    hasScheduledTimer: Boolean
 ) {
     Column {
         TopAppBar(
@@ -136,6 +173,17 @@ fun TimerTopBar(
                     "Simple Progress",
                     fontWeight = FontWeight.Bold
                 )
+            },
+            actions = {
+                if (hasScheduledTimer) {
+                    IconButton(onClick = onScheduledTimersClick) {
+                        Icon(
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = "Scheduled Timer",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
@@ -162,7 +210,9 @@ fun TimerContent(
     animatedProgress: Float,
     paddingValues: PaddingValues,
     onStart: () -> Unit,
+    onSchedule: () -> Unit,
     onReset: () -> Unit,
+    onCancelScheduled: () -> Unit,
     onModeChanged: (String) -> Unit,
     onHoursChanged: (Int) -> Unit,
     onMinutesChanged: (Int) -> Unit,
@@ -216,8 +266,11 @@ fun TimerContent(
         BottomButtons(
             isRunning = uiState.isRunning,
             isFinished = uiState.isFinished,
+            isScheduled = uiState.isScheduled,
             onStart = onStart,
+            onSchedule = onSchedule,
             onReset = onReset,
+            onCancelScheduled = onCancelScheduled,
             modifier = Modifier.align(Alignment.BottomCenter),
             hours = uiState.hours,
             minutes = uiState.minutes,

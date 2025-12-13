@@ -2,6 +2,7 @@ package com.example.simple_progress.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -30,8 +31,11 @@ import kotlin.math.roundToInt
 fun BottomButtons(
     isRunning: Boolean,
     isFinished: Boolean,
+    isScheduled: Boolean,
     onStart: () -> Unit,
+    onSchedule: () -> Unit,
     onReset: () -> Unit,
+    onCancelScheduled: () -> Unit,
     modifier: Modifier = Modifier,
     hours: Int = 0,
     minutes: Int = 0,
@@ -68,6 +72,7 @@ fun BottomButtons(
                 
                 StartButton(
                     onStart = onStart,
+                    onLongPress = onSchedule,
                     isEnabled = isEnabled
                 )
             }
@@ -75,20 +80,46 @@ fun BottomButtons(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StartButton(
     onStart: () -> Unit,
+    onLongPress: () -> Unit,
     isEnabled: Boolean
 ) {
-    Button(
-        onClick = onStart,
+    val interactionSource = remember { MutableInteractionSource() }
+    
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .combinedClickable(
+                enabled = isEnabled,
+                onClick = onStart,
+                onLongClick = onLongPress,
+                interactionSource = interactionSource,
+                indication = null
+            ),
         shape = RoundedCornerShape(28.dp),
-        enabled = isEnabled
+        color = if (isEnabled)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+        contentColor = if (isEnabled)
+            MaterialTheme.colorScheme.onPrimary
+        else
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     ) {
-        Text("Start", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "Start",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
