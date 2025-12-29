@@ -32,10 +32,13 @@ fun BottomButtons(
     isRunning: Boolean,
     isFinished: Boolean,
     isScheduled: Boolean,
+    isPaused: Boolean = false,
     onStart: () -> Unit,
     onSchedule: () -> Unit,
     onReset: () -> Unit,
     onCancelScheduled: () -> Unit,
+    onPause: () -> Unit = {},
+    onResume: () -> Unit = {},
     modifier: Modifier = Modifier,
     hours: Int = 0,
     minutes: Int = 0,
@@ -53,10 +56,47 @@ fun BottomButtons(
                 ResetButton(onReset = onReset)
             }
             isRunning -> {
-                ResetButton(
-                    onReset = onReset,
-                    isError = true
-                )
+                if (timerMode == "duration") {
+                    // Show pause/resume and reset buttons for duration timers
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (isPaused) {
+                            Button(
+                                onClick = onResume,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
+                                Text("Resume")
+                            }
+                        } else {
+                            Button(
+                                onClick = onPause,
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(28.dp)
+                            ) {
+                                Text("Pause")
+                            }
+                        }
+                        Button(
+                            onClick = onReset,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = RoundedCornerShape(28.dp)
+                        ) {
+                            Text("Reset")
+                        }
+                    }
+                } else {
+                    // Show only reset button for time tab timers
+                    ResetButton(
+                        onReset = onReset,
+                        isError = true
+                    )
+                }
             }
             else -> {
                 val isEnabled = when (timerMode) {

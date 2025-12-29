@@ -20,6 +20,9 @@ class TimerService : Service() {
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var wakeLock: PowerManager.WakeLock? = null
     private var currentTimerName: String = ""
+    private var currentTimerMode: String = "duration"
+    private var isPaused: Boolean = false
+    private var pausedTimeRemaining: Long = 0L
     
     private val sharedPreferences by lazy {
         getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
@@ -50,8 +53,10 @@ class TimerService : Service() {
                 val remainingTime = intent.getLongExtra(EXTRA_REMAINING_TIME, 0)
                 val totalTime = intent.getLongExtra(EXTRA_TOTAL_TIME, 0)
                 val timerName = intent.getStringExtra(EXTRA_TIMER_NAME) ?: ""
+                val timerMode = intent.getStringExtra(EXTRA_TIMER_MODE) ?: "duration"
 
                 if (remainingTime > 0 && totalTime > 0) {
+                    currentTimerMode = timerMode
                     startForeground(TIMER_NOTIFICATION_ID, createInitialNotification(timerName))
                     startCountdown(remainingTime, totalTime, timerName)
                 }
@@ -66,6 +71,12 @@ class TimerService : Service() {
             ACTION_RESET_TIMER -> {
                 stopTimer()
                 broadcastTimerReset()
+            }
+            ACTION_PAUSE_TIMER -> {
+                pauseTimer()
+            }
+            ACTION_RESUME_TIMER -> {
+                resumeTimer()
             }
         }
 
@@ -94,31 +105,119 @@ class TimerService : Service() {
     private fun startCountdown(remainingTime: Long, totalTime: Long, timerName: String) {
         timerJob?.cancel()
         currentTimerName = timerName
+        isPaused = false
 
         timerJob = serviceScope.launch {
             var timeLeft = remainingTime
-            
+
             while (timeLeft > 0 && isActive) {
+                // Wait for resume if paused
+                while (isPaused && isActive) {
+                    updatePausedNotification()
+                    delay(500) // Update paused notification every 500ms
+                }
+
+                if (!isActive) break
+
                 val timeString = formatTime(timeLeft)
                 val progress = 1 - (timeLeft.toFloat() / totalTime)
                 val percentage = (progress * 100).toInt()
-                
+
                 // Update notification
                 updateProgressNotification(timeString, percentage)
-                
+
                 // Notify listeners (ViewModel)
                 onTimerUpdate?.invoke(timeString, progress, percentage)
-                
+
                 delay(1000)
                 timeLeft -= 1000
             }
-            
+
             if (isActive) {
                 // Timer completed
                 onTimerComplete?.invoke()
                 showCompletionNotification(timerName)
                 stopTimer()
             }
+        }
+    }
+
+    private fun pauseTimer() {
+        isPaused = true
+        // Store the current remaining time for resume
+        val endTime = sharedPreferences.getLong("end_time", 0)
+        val currentTime = System.currentTimeMillis()
+        if (endTime > currentTime) {
+            pausedTimeRemaining = endTime - currentTime
+        }
+        updatePausedNotification()
+    }
+
+    private fun resumeTimer() {
+        if (isPaused && pausedTimeRemaining > 0) {
+            isPaused = false
+            // Calculate new end time based on paused remaining time
+            val newEndTime = System.currentTimeMillis() + pausedTimeRemaining
+            val totalTime = sharedPreferences.getLong("total_time", 0)
+
+            sharedPreferences.edit()
+                .putLong("end_time", newEndTime)
+                .apply()
+
+            // Update notification to show running state
+            val timeString = formatTime(pausedTimeRemaining)
+            val progress = 1 - (pausedTimeRemaining.toFloat() / totalTime)
+            val percentage = (progress * 100).toInt()
+            updateProgressNotification(timeString, percentage)
+        }
+    }
+
+    private fun updatePausedNotification() {
+        val totalTime = sharedPreferences.getLong("total_time", 0)
+
+        if (totalTime > 0 && pausedTimeRemaining > 0) {
+            val timeString = formatTime(pausedTimeRemaining)
+            val progress = 1 - (pausedTimeRemaining.toFloat() / totalTime)
+            val percentage = (progress * 100).toInt()
+
+            val intent = Intent(this, MainActivity::class.java)
+            val pendingIntent = PendingIntent.getActivity(
+                this, 0, intent, PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val resetIntent = Intent(this, TimerResetReceiver::class.java)
+            val resetPendingIntent = PendingIntent.getBroadcast(
+                this, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val resumeIntent = Intent(this, TimerService::class.java).apply {
+                action = ACTION_RESUME_TIMER
+            }
+            val resumePendingIntent = PendingIntent.getService(
+                this, 2, resumeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
+                .setContentTitle(currentTimerName.ifEmpty { "Timer Paused" })
+                .setContentText("$timeString - $percentage% (Paused)")
+                .setProgress(100, percentage, false)
+                .setOngoing(true)
+                .setContentIntent(pendingIntent)
+                .setOnlyAlertOnce(true)
+                .addAction(
+                    R.drawable.ic_launcher_foreground,
+                    "Resume",
+                    resumePendingIntent
+                )
+                .addAction(
+                    R.drawable.ic_launcher_foreground,
+                    "Reset",
+                    resetPendingIntent
+                )
+                .build()
+
+            notificationManager.notify(TIMER_NOTIFICATION_ID, notification)
         }
     }
 
@@ -230,13 +329,13 @@ class TimerService : Service() {
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent, PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         val resetIntent = Intent(this, TimerResetReceiver::class.java)
         val resetPendingIntent = PendingIntent.getBroadcast(
             this, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+
+        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(currentTimerName.ifEmpty { "Timer Running" })
             .setContentText("$timeString - $percentage%")
@@ -244,13 +343,29 @@ class TimerService : Service() {
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setOnlyAlertOnce(true)
-            .addAction(
-                R.drawable.ic_launcher_foreground,
-                "Reset",
-                resetPendingIntent
+
+        // Only add pause action for duration timers
+        if (currentTimerMode == "duration") {
+            val pauseIntent = Intent(this, TimerService::class.java).apply {
+                action = ACTION_PAUSE_TIMER
+            }
+            val pausePendingIntent = PendingIntent.getService(
+                this, 3, pauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            .build()
-        
+            notificationBuilder.addAction(
+                R.drawable.ic_launcher_foreground,
+                "Pause",
+                pausePendingIntent
+            )
+        }
+
+        notificationBuilder.addAction(
+            R.drawable.ic_launcher_foreground,
+            "Reset",
+            resetPendingIntent
+        )
+
+        val notification = notificationBuilder.build()
         notificationManager.notify(TIMER_NOTIFICATION_ID, notification)
     }
     
@@ -301,11 +416,14 @@ class TimerService : Service() {
         const val ACTION_UPDATE_TIMER_NAME = "com.example.simple_progress.UPDATE_TIMER_NAME"
         const val ACTION_STOP_TIMER = "com.example.simple_progress.STOP_TIMER"
         const val ACTION_RESET_TIMER = "com.example.simple_progress.RESET_TIMER"
+        const val ACTION_PAUSE_TIMER = "com.example.simple_progress.PAUSE_TIMER"
+        const val ACTION_RESUME_TIMER = "com.example.simple_progress.RESUME_TIMER"
         const val ACTION_TIMER_RESET = "com.example.simple_progress.TIMER_RESET"
         
         const val EXTRA_REMAINING_TIME = "remaining_time"
         const val EXTRA_TOTAL_TIME = "total_time"
         const val EXTRA_TIMER_NAME = "timer_name"
+        const val EXTRA_TIMER_MODE = "timer_mode"
         
         private const val CHANNEL_ID = "timer_channel"
         private const val TIMER_NOTIFICATION_ID = 1

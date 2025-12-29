@@ -35,6 +35,7 @@ data class TimerState(
     val percentage: Int = 0,
     val isRunning: Boolean = false,
     val isFinished: Boolean = false,
+    val isPaused: Boolean = false,
     val hours: Int = 1,
     val minutes: Int = 30, // Default to 1 hour 30 minutes for duration mode
     val timerName: String = "",
@@ -213,6 +214,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             putExtra(TimerService.EXTRA_REMAINING_TIME, totalTimeInMillis)
             putExtra(TimerService.EXTRA_TOTAL_TIME, totalTimeInMillis)
             putExtra(TimerService.EXTRA_TIMER_NAME, _uiState.value.timerName)
+            putExtra(TimerService.EXTRA_TIMER_MODE, _uiState.value.timerMode)
         }
         
         ContextCompat.startForegroundService(context, intent)
@@ -222,6 +224,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             isRunning = true,
             isFinished = false,
+            isPaused = false,
             progress = 0f,
             percentage = 0
         )
@@ -260,6 +263,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             putExtra(ScheduledTimerReceiver.EXTRA_REMAINING_TIME, totalTimeInMillis)
             putExtra(ScheduledTimerReceiver.EXTRA_TOTAL_TIME, totalTimeInMillis)
             putExtra(ScheduledTimerReceiver.EXTRA_TIMER_NAME, _uiState.value.timerName)
+            putExtra(ScheduledTimerReceiver.EXTRA_TIMER_MODE, _uiState.value.timerMode)
         }
         
         val pendingIntent = PendingIntent.getBroadcast(
@@ -330,6 +334,28 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
     
+    fun pauseTimer() {
+        if (_uiState.value.isRunning && !_uiState.value.isPaused && _uiState.value.timerMode == "duration") {
+            val intent = Intent(context, TimerService::class.java).apply {
+                action = TimerService.ACTION_PAUSE_TIMER
+            }
+            ContextCompat.startForegroundService(context, intent)
+
+            _uiState.value = _uiState.value.copy(isPaused = true)
+        }
+    }
+
+    fun resumeTimer() {
+        if (_uiState.value.isRunning && _uiState.value.isPaused && _uiState.value.timerMode == "duration") {
+            val intent = Intent(context, TimerService::class.java).apply {
+                action = TimerService.ACTION_RESUME_TIMER
+            }
+            ContextCompat.startForegroundService(context, intent)
+
+            _uiState.value = _uiState.value.copy(isPaused = false)
+        }
+    }
+
     fun resetTimer() {
         // Stop the service
         val intent = Intent(context, TimerService::class.java).apply {
@@ -337,12 +363,12 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         }
         context.startService(intent)
         unbindService()
-        
+
         // Cancel any scheduled timers
         if (_uiState.value.isScheduled) {
             cancelScheduledTimer()
         }
-        
+
         val currentState = _uiState.value
         _uiState.value = currentState.copy(
             timeRemaining = "00:00:00",
@@ -350,6 +376,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             percentage = 0,
             isRunning = false,
             isFinished = false,
+            isPaused = false,
             timerName = "",
             hours = if (currentState.timerMode == "duration") 1 else currentState.hours,
             minutes = if (currentState.timerMode == "duration") 30 else currentState.minutes,
@@ -452,6 +479,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             .putLong(KEY_END_TIME, endTime)
             .putLong(KEY_TOTAL_TIME, totalTime)
             .putString(KEY_TIMER_NAME, _uiState.value.timerName)
+            .putBoolean(KEY_IS_PAUSED, _uiState.value.isPaused)
             .apply()
     }
     
@@ -477,6 +505,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 .putLong(KEY_SCHEDULED_TIME, scheduledTime)
                 .putLong(KEY_SCHEDULED_DURATION, duration)
                 .putString(KEY_SCHEDULED_TIMER_NAME, timerName)
+                .putString(KEY_SCHEDULED_TIMER_MODE, timerMode)
                 .apply()
         }
     }
@@ -486,6 +515,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             .remove(KEY_SCHEDULED_TIME)
             .remove(KEY_SCHEDULED_DURATION)
             .remove(KEY_SCHEDULED_TIMER_NAME)
+            .remove(KEY_SCHEDULED_TIMER_MODE)
             .apply()
     }
     
@@ -494,6 +524,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             .remove(KEY_END_TIME)
             .remove(KEY_TOTAL_TIME)
             .remove(KEY_TIMER_NAME)
+            .remove(KEY_IS_PAUSED)
             .apply()
     }
     
@@ -502,27 +533,30 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val totalTime = sharedPreferences.getLong(KEY_TOTAL_TIME, 0)
         val timerName = sharedPreferences.getString(KEY_TIMER_NAME, "") ?: ""
         val timerMode = sharedPreferences.getString(KEY_TIMER_MODE, "duration") ?: "duration"
-        
+        val isPaused = sharedPreferences.getBoolean(KEY_IS_PAUSED, false)
+
         // Restore scheduled timer state
         val scheduledTime = sharedPreferences.getLong(KEY_SCHEDULED_TIME, 0)
         val scheduledDuration = sharedPreferences.getLong(KEY_SCHEDULED_DURATION, 0)
         val scheduledTimerName = sharedPreferences.getString(KEY_SCHEDULED_TIMER_NAME, "") ?: ""
-        
+        val scheduledTimerMode = sharedPreferences.getString(KEY_SCHEDULED_TIMER_MODE, "duration") ?: "duration"
+
         // Set defaults based on mode
         val targetHour = if (timerMode == "target_time") getCurrentHour() else getDefaultTargetHour()
         val targetMinute = if (timerMode == "target_time") getCurrentMinute() else getDefaultTargetMinute()
         val hours = if (timerMode == "duration") 1 else 0
         val minutes = if (timerMode == "duration") 30 else 0
-        
+
         _uiState.value = _uiState.value.copy(
             timerName = timerName,
             timerMode = timerMode,
             hours = hours,
             minutes = minutes,
             targetHour = targetHour,
-            targetMinute = targetMinute
+            targetMinute = targetMinute,
+            isPaused = isPaused
         )
-        
+
         // Check if there's a scheduled timer
         if (scheduledTime > System.currentTimeMillis()) {
             _uiState.value = _uiState.value.copy(
@@ -535,10 +569,10 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             // Scheduled time has passed, clear it
             clearScheduledTimerState()
         }
-        
+
         if (endTime > System.currentTimeMillis() && totalTime > 0) {
             val remainingTime = endTime - System.currentTimeMillis()
-            
+
             // Restart the service with remaining time
             val intent = Intent(context, TimerService::class.java).apply {
                 action = TimerService.ACTION_START_TIMER
@@ -546,13 +580,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 putExtra(TimerService.EXTRA_TOTAL_TIME, totalTime)
                 putExtra(TimerService.EXTRA_TIMER_NAME, timerName)
             }
-            
+
             ContextCompat.startForegroundService(context, intent)
             bindService()
-            
+
             _uiState.value = _uiState.value.copy(
                 isRunning = true,
-                isFinished = false
+                isFinished = false,
+                isPaused = isPaused
             )
         }
     }
@@ -599,9 +634,11 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_TIMER_MODE = "timer_mode"
         private const val KEY_TARGET_HOUR = "target_hour"
         private const val KEY_TARGET_MINUTE = "target_minute"
+        private const val KEY_IS_PAUSED = "is_paused"
         private const val KEY_SCHEDULED_TIME = "scheduled_time"
         private const val KEY_SCHEDULED_DURATION = "scheduled_duration"
         private const val KEY_SCHEDULED_TIMER_NAME = "scheduled_timer_name"
+        private const val KEY_SCHEDULED_TIMER_MODE = "scheduled_timer_mode"
         private const val SCHEDULED_TIMER_REQUEST_CODE = 1001
     }
 }
