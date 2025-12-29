@@ -153,6 +153,15 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     fun updateTimerName(name: String) {
         _uiState.value = _uiState.value.copy(timerName = name)
         saveTimerName(name)
+
+        // If timer is running, update the service's notification
+        if (_uiState.value.isRunning && serviceBound) {
+            val intent = Intent(context, TimerService::class.java).apply {
+                action = TimerService.ACTION_UPDATE_TIMER_NAME
+                putExtra(TimerService.EXTRA_TIMER_NAME, name)
+            }
+            ContextCompat.startForegroundService(context, intent)
+        }
     }
     
     fun setTimerMode(mode: String) {

@@ -19,6 +19,7 @@ class TimerService : Service() {
     private var timerJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var wakeLock: PowerManager.WakeLock? = null
+    private var currentTimerName: String = ""
     
     private val sharedPreferences by lazy {
         getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
@@ -49,11 +50,15 @@ class TimerService : Service() {
                 val remainingTime = intent.getLongExtra(EXTRA_REMAINING_TIME, 0)
                 val totalTime = intent.getLongExtra(EXTRA_TOTAL_TIME, 0)
                 val timerName = intent.getStringExtra(EXTRA_TIMER_NAME) ?: ""
-                
+
                 if (remainingTime > 0 && totalTime > 0) {
                     startForeground(TIMER_NOTIFICATION_ID, createInitialNotification(timerName))
                     startCountdown(remainingTime, totalTime, timerName)
                 }
+            }
+            ACTION_UPDATE_TIMER_NAME -> {
+                val newTimerName = intent.getStringExtra(EXTRA_TIMER_NAME) ?: ""
+                updateTimerName(newTimerName)
             }
             ACTION_STOP_TIMER -> {
                 stopTimer()
@@ -63,7 +68,7 @@ class TimerService : Service() {
                 broadcastTimerReset()
             }
         }
-        
+
         return START_STICKY
     }
     
@@ -88,7 +93,8 @@ class TimerService : Service() {
     
     private fun startCountdown(remainingTime: Long, totalTime: Long, timerName: String) {
         timerJob?.cancel()
-        
+        currentTimerName = timerName
+
         timerJob = serviceScope.launch {
             var timeLeft = remainingTime
             
@@ -98,7 +104,7 @@ class TimerService : Service() {
                 val percentage = (progress * 100).toInt()
                 
                 // Update notification
-                updateProgressNotification(timerName, timeString, percentage)
+                updateProgressNotification(timeString, percentage)
                 
                 // Notify listeners (ViewModel)
                 onTimerUpdate?.invoke(timeString, progress, percentage)
@@ -115,7 +121,57 @@ class TimerService : Service() {
             }
         }
     }
-    
+
+    private fun updateTimerName(newName: String) {
+        currentTimerName = newName
+        // Update the notification with the new name immediately
+        if (timerJob?.isActive == true) {
+            updateNotificationWithNewName()
+        }
+    }
+
+    private fun updateNotificationWithNewName() {
+        // Get current timer state from shared preferences
+        val endTime = sharedPreferences.getLong("end_time", 0)
+        val totalTime = sharedPreferences.getLong("total_time", 0)
+
+        if (endTime > 0 && totalTime > 0) {
+            val remainingTime = endTime - System.currentTimeMillis()
+            if (remainingTime > 0) {
+                val timeString = formatTime(remainingTime)
+                val progress = 1 - (remainingTime.toFloat() / totalTime)
+                val percentage = (progress * 100).toInt()
+
+                val intent = Intent(this, MainActivity::class.java)
+                val pendingIntent = PendingIntent.getActivity(
+                    this, 0, intent, PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val resetIntent = Intent(this, TimerResetReceiver::class.java)
+                val resetPendingIntent = PendingIntent.getBroadcast(
+                    this, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+
+                val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_launcher_foreground)
+                    .setContentTitle(currentTimerName.ifEmpty { "Timer Running" })
+                    .setContentText("$timeString - $percentage%")
+                    .setProgress(100, percentage, false)
+                    .setOngoing(true)
+                    .setContentIntent(pendingIntent)
+                    .setOnlyAlertOnce(true)
+                    .addAction(
+                        R.drawable.ic_launcher_foreground,
+                        "Reset",
+                        resetPendingIntent
+                    )
+                    .build()
+
+                notificationManager.notify(TIMER_NOTIFICATION_ID, notification)
+            }
+        }
+    }
+
     fun stopTimer() {
         timerJob?.cancel()
         timerJob = null
@@ -169,7 +225,7 @@ class TimerService : Service() {
             .build()
     }
     
-    private fun updateProgressNotification(timerName: String, timeString: String, percentage: Int) {
+    private fun updateProgressNotification(timeString: String, percentage: Int) {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent, PendingIntent.FLAG_IMMUTABLE
@@ -182,7 +238,7 @@ class TimerService : Service() {
         
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle(timerName.ifEmpty { "Timer Running" })
+            .setContentTitle(currentTimerName.ifEmpty { "Timer Running" })
             .setContentText("$timeString - $percentage%")
             .setProgress(100, percentage, false)
             .setOngoing(true)
@@ -242,6 +298,7 @@ class TimerService : Service() {
     
     companion object {
         const val ACTION_START_TIMER = "com.example.simple_progress.START_TIMER"
+        const val ACTION_UPDATE_TIMER_NAME = "com.example.simple_progress.UPDATE_TIMER_NAME"
         const val ACTION_STOP_TIMER = "com.example.simple_progress.STOP_TIMER"
         const val ACTION_RESET_TIMER = "com.example.simple_progress.RESET_TIMER"
         const val ACTION_TIMER_RESET = "com.example.simple_progress.TIMER_RESET"
@@ -255,5 +312,6 @@ class TimerService : Service() {
         private const val DONE_NOTIFICATION_ID = 2
     }
 }
+
 
 
