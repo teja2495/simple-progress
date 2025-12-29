@@ -31,9 +31,12 @@ import kotlin.math.roundToInt
 fun BottomButtons(
     isRunning: Boolean,
     isFinished: Boolean,
+    isScheduled: Boolean,
     isPaused: Boolean = false,
     onStart: () -> Unit,
+    onSchedule: () -> Unit,
     onReset: () -> Unit,
+    onCancelScheduled: () -> Unit,
     onPause: () -> Unit = {},
     onResume: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -109,6 +112,7 @@ fun BottomButtons(
                 
                 StartButton(
                     onStart = onStart,
+                    onLongPress = onSchedule,
                     isEnabled = isEnabled
                 )
             }
@@ -116,24 +120,46 @@ fun BottomButtons(
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun StartButton(
     onStart: () -> Unit,
+    onLongPress: () -> Unit,
     isEnabled: Boolean
 ) {
-    Button(
-        onClick = onStart,
+    val interactionSource = remember { MutableInteractionSource() }
+    
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp),
+            .height(56.dp)
+            .combinedClickable(
+                enabled = isEnabled,
+                onClick = onStart,
+                onLongClick = onLongPress,
+                interactionSource = interactionSource,
+                indication = null
+            ),
         shape = RoundedCornerShape(28.dp),
-        enabled = isEnabled
+        color = if (isEnabled)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+        contentColor = if (isEnabled)
+            MaterialTheme.colorScheme.onPrimary
+        else
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
     ) {
-        Text(
-            "Start",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "Start",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
     }
 }
 
