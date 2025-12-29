@@ -5,7 +5,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -65,6 +69,8 @@ fun TimerNameDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val focusRequester = remember { FocusRequester() }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Set Timer Name") },
@@ -72,8 +78,14 @@ fun TimerNameDialog(
             OutlinedTextField(
                 value = currentName,
                 onValueChange = onNameChanged,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
             )
+
+            LaunchedEffect(Unit) {
+                focusRequester.requestFocus()
+            }
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
