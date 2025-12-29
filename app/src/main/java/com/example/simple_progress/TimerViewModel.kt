@@ -1,6 +1,5 @@
 package com.example.simple_progress
 
-import android.app.AlarmManager
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -41,10 +40,7 @@ data class TimerState(
     val timerName: String = "",
     val timerMode: String = "duration", // "duration" or "target_time"
     val targetHour: Int = getCurrentHour(), // Default to current time for time mode
-    val targetMinute: Int = getCurrentMinute(), // Default to current time for time mode
-    val isScheduled: Boolean = false,
-    val scheduledStartTime: Long = 0L, // Timestamp when timer should start
-    val scheduledDuration: Long = 0L // Duration of the scheduled timer in milliseconds
+    val targetMinute: Int = getCurrentMinute() // Default to current time for time mode
 )
 
 // ============================================================================
@@ -55,7 +51,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     private val context = getApplication<Application>()
     private val sharedPreferences = context.getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
     private val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     
     private val _uiState = MutableStateFlow(TimerState())
     val uiState: StateFlow<TimerState> = _uiState.asStateFlow()
@@ -72,8 +67,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             // Update UI state to show timer is running
             _uiState.value = _uiState.value.copy(
                 isRunning = true,
-                isFinished = false,
-                isScheduled = false
+                isFinished = false
             )
             
             // Set up callbacks
@@ -230,109 +224,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
     
-    fun scheduleTimer(startHour: Int, startMinute: Int) {
-        val totalTimeInMillis = if (_uiState.value.timerMode == "target_time") {
-            calculateTimeToTarget()
-        } else {
-            calculateDurationTime()
-        }
-        
-        if (totalTimeInMillis <= 0) return
-        
-        // Calculate the scheduled start time
-        val scheduledStartTime = Calendar.getInstance().apply {
-            set(Calendar.HOUR_OF_DAY, startHour)
-            set(Calendar.MINUTE, startMinute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-            
-            // If scheduled time is before current time, schedule for tomorrow
-            if (before(Calendar.getInstance())) {
-                add(Calendar.DAY_OF_YEAR, 1)
-            }
-        }.timeInMillis
-        
-        // Validate that scheduled time is within 24 hours
-        val timeUntilStart = scheduledStartTime - System.currentTimeMillis()
-        if (timeUntilStart <= 0 || timeUntilStart > 24 * 60 * 60 * 1000L) {
-            return
-        }
-        
-        // Create the intent for the scheduled timer receiver
-        val intent = Intent(context, ScheduledTimerReceiver::class.java).apply {
-            putExtra(ScheduledTimerReceiver.EXTRA_REMAINING_TIME, totalTimeInMillis)
-            putExtra(ScheduledTimerReceiver.EXTRA_TOTAL_TIME, totalTimeInMillis)
-            putExtra(ScheduledTimerReceiver.EXTRA_TIMER_NAME, _uiState.value.timerName)
-            putExtra(ScheduledTimerReceiver.EXTRA_TIMER_MODE, _uiState.value.timerMode)
-        }
-        
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            SCHEDULED_TIMER_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        // Schedule the alarm
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        scheduledStartTime,
-                        pendingIntent
-                    )
-                } else {
-                    // Fallback to inexact alarm
-                    alarmManager.setAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        scheduledStartTime,
-                        pendingIntent
-                    )
-                }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    scheduledStartTime,
-                    pendingIntent
-                )
-            }
-            
-            // Save scheduled timer state
-            saveScheduledTimerState(scheduledStartTime, totalTimeInMillis)
-            
-            // Update UI state
-            _uiState.value = _uiState.value.copy(
-                isScheduled = true,
-                scheduledStartTime = scheduledStartTime,
-                scheduledDuration = totalTimeInMillis
-            )
-        } catch (e: SecurityException) {
-            // Permission not granted
-            e.printStackTrace()
-        }
-    }
     
-    fun cancelScheduledTimer() {
-        val intent = Intent(context, ScheduledTimerReceiver::class.java)
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            SCHEDULED_TIMER_REQUEST_CODE,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        
-        alarmManager.cancel(pendingIntent)
-        pendingIntent.cancel()
-        
-        clearScheduledTimerState()
-        
-        _uiState.value = _uiState.value.copy(
-            isScheduled = false,
-            scheduledStartTime = 0L,
-            scheduledDuration = 0L
-        )
-    }
     
     fun pauseTimer() {
         if (_uiState.value.isRunning && !_uiState.value.isPaused && _uiState.value.timerMode == "duration") {
@@ -364,10 +256,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         context.startService(intent)
         unbindService()
 
-        // Cancel any scheduled timers
-        if (_uiState.value.isScheduled) {
-            cancelScheduledTimer()
-        }
 
         val currentState = _uiState.value
         _uiState.value = currentState.copy(
@@ -381,10 +269,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             hours = if (currentState.timerMode == "duration") 1 else currentState.hours,
             minutes = if (currentState.timerMode == "duration") 30 else currentState.minutes,
             targetHour = if (currentState.timerMode == "target_time") getCurrentHour() else currentState.targetHour,
-            targetMinute = if (currentState.timerMode == "target_time") getCurrentMinute() else currentState.targetMinute,
-            isScheduled = false,
-            scheduledStartTime = 0L,
-            scheduledDuration = 0L
+            targetMinute = if (currentState.timerMode == "target_time") getCurrentMinute() else currentState.targetMinute
         )
         clearTimerState()
         clearNotifications()
@@ -412,7 +297,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 isRunning = true,
                 isFinished = false,
-                isScheduled = false,
                 timeRemaining = timeString,
                 progress = progress,
                 percentage = percentage,
@@ -499,25 +383,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             .apply()
     }
     
-    private fun saveScheduledTimerState(scheduledTime: Long, duration: Long) {
-        with(_uiState.value) {
-            sharedPreferences.edit()
-                .putLong(KEY_SCHEDULED_TIME, scheduledTime)
-                .putLong(KEY_SCHEDULED_DURATION, duration)
-                .putString(KEY_SCHEDULED_TIMER_NAME, timerName)
-                .putString(KEY_SCHEDULED_TIMER_MODE, timerMode)
-                .apply()
-        }
-    }
-    
-    private fun clearScheduledTimerState() {
-        sharedPreferences.edit()
-            .remove(KEY_SCHEDULED_TIME)
-            .remove(KEY_SCHEDULED_DURATION)
-            .remove(KEY_SCHEDULED_TIMER_NAME)
-            .remove(KEY_SCHEDULED_TIMER_MODE)
-            .apply()
-    }
     
     private fun clearTimerState() {
         sharedPreferences.edit()
@@ -535,12 +400,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         val timerMode = sharedPreferences.getString(KEY_TIMER_MODE, "duration") ?: "duration"
         val isPaused = sharedPreferences.getBoolean(KEY_IS_PAUSED, false)
 
-        // Restore scheduled timer state
-        val scheduledTime = sharedPreferences.getLong(KEY_SCHEDULED_TIME, 0)
-        val scheduledDuration = sharedPreferences.getLong(KEY_SCHEDULED_DURATION, 0)
-        val scheduledTimerName = sharedPreferences.getString(KEY_SCHEDULED_TIMER_NAME, "") ?: ""
-        val scheduledTimerMode = sharedPreferences.getString(KEY_SCHEDULED_TIMER_MODE, "duration") ?: "duration"
-
         // Set defaults based on mode
         val targetHour = if (timerMode == "target_time") getCurrentHour() else getDefaultTargetHour()
         val targetMinute = if (timerMode == "target_time") getCurrentMinute() else getDefaultTargetMinute()
@@ -557,18 +416,6 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
             isPaused = isPaused
         )
 
-        // Check if there's a scheduled timer
-        if (scheduledTime > System.currentTimeMillis()) {
-            _uiState.value = _uiState.value.copy(
-                isScheduled = true,
-                scheduledStartTime = scheduledTime,
-                scheduledDuration = scheduledDuration,
-                timerName = scheduledTimerName
-            )
-        } else if (scheduledTime > 0) {
-            // Scheduled time has passed, clear it
-            clearScheduledTimerState()
-        }
 
         if (endTime > System.currentTimeMillis() && totalTime > 0) {
             val remainingTime = endTime - System.currentTimeMillis()
@@ -635,10 +482,5 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_TARGET_HOUR = "target_hour"
         private const val KEY_TARGET_MINUTE = "target_minute"
         private const val KEY_IS_PAUSED = "is_paused"
-        private const val KEY_SCHEDULED_TIME = "scheduled_time"
-        private const val KEY_SCHEDULED_DURATION = "scheduled_duration"
-        private const val KEY_SCHEDULED_TIMER_NAME = "scheduled_timer_name"
-        private const val KEY_SCHEDULED_TIMER_MODE = "scheduled_timer_mode"
-        private const val SCHEDULED_TIMER_REQUEST_CODE = 1001
     }
 }
