@@ -91,7 +91,7 @@ obj/
 .AppleDouble
 .LSOverride
 .DM
-.salive
+*.salive
 
 # Windows
 Thumbs.db
