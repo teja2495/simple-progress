@@ -17,6 +17,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,7 +91,9 @@ fun TimerScreen(viewModel: TimerViewModel = viewModel()) {
                 isRunning = uiState.isRunning,
                 isFinished = uiState.isFinished,
                 timerMode = uiState.timerMode,
+                isCompletionSoundEnabled = uiState.isCompletionSoundEnabled,
                 onModeChanged = viewModel::setTimerMode,
+                onToggleCompletionSound = viewModel::toggleCompletionSoundEnabled,
                 onScheduledTimersClick = { showScheduledTimersDialog = true },
                 hasScheduledTimer = uiState.isScheduled
             )
@@ -164,7 +168,9 @@ fun TimerTopBar(
     isRunning: Boolean,
     isFinished: Boolean,
     timerMode: String,
+    isCompletionSoundEnabled: Boolean,
     onModeChanged: (String) -> Unit,
+    onToggleCompletionSound: () -> Unit,
     onScheduledTimersClick: () -> Unit,
     hasScheduledTimer: Boolean
 ) {
@@ -177,6 +183,27 @@ fun TimerTopBar(
                 )
             },
             actions = {
+                if (isRunning) {
+                    IconButton(onClick = onToggleCompletionSound) {
+                        Icon(
+                            imageVector = if (isCompletionSoundEnabled) {
+                                Icons.Default.Notifications
+                            } else {
+                                Icons.Default.NotificationsOff
+                            },
+                            contentDescription = if (isCompletionSoundEnabled) {
+                                "Completion sound on"
+                            } else {
+                                "Completion sound off"
+                            },
+                            tint = if (isCompletionSoundEnabled) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
+                }
                 if (hasScheduledTimer) {
                     IconButton(onClick = onScheduledTimersClick) {
                         Icon(

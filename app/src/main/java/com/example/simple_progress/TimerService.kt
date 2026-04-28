@@ -4,8 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
@@ -23,6 +26,7 @@ class TimerService : Service() {
     private var currentTimerMode: String = "duration"
     private var isPaused: Boolean = false
     private var pausedTimeRemaining: Long = 0L
+    private var completionMediaPlayer: MediaPlayer? = null
     
     private val sharedPreferences by lazy {
         getSharedPreferences("timer_prefs", Context.MODE_PRIVATE)
@@ -43,7 +47,7 @@ class TimerService : Service() {
     
     override fun onCreate() {
         super.onCreate()
-        createNotificationChannel()
+        createNotificationChannels()
         acquireWakeLock()
     }
     
@@ -135,9 +139,14 @@ class TimerService : Service() {
 
             if (isActive) {
                 // Timer completed
+                val isCompletionSoundEnabled = sharedPreferences.getBoolean(KEY_COMPLETION_SOUND_ENABLED, false)
                 onTimerComplete?.invoke()
                 showCompletionNotification(timerName)
-                stopTimer()
+                if (isCompletionSoundEnabled) {
+                    playCompletionSoundThenStopService()
+                } else {
+                    stopTimer()
+                }
             }
         }
     }
@@ -197,7 +206,7 @@ class TimerService : Service() {
                 this, 2, resumeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
 
-            val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            val notification = NotificationCompat.Builder(this, PROGRESS_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setContentTitle(currentTimerName.ifEmpty { "Timer Paused" })
                 .setContentText("$timeString - $percentage% (Paused)")
@@ -251,7 +260,7 @@ class TimerService : Service() {
                     this, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
 
-                val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+                val notification = NotificationCompat.Builder(this, PROGRESS_CHANNEL_ID)
                     .setSmallIcon(R.drawable.ic_launcher_foreground)
                     .setContentTitle(currentTimerName.ifEmpty { "Timer Running" })
                     .setContentText("$timeString - $percentage%")
@@ -286,16 +295,45 @@ class TimerService : Service() {
         return String.format("%02d:%02d:%02d", hours, minutes, seconds)
     }
     
-    private fun createNotificationChannel() {
+    private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
+            val progressChannel = NotificationChannel(
+                PROGRESS_CHANNEL_ID,
                 "Timer Notifications",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Shows timer progress and completion"
+                setSound(null, null)
             }
-            notificationManager.createNotificationChannel(channel)
+            notificationManager.createNotificationChannel(progressChannel)
+
+            val completionSilentChannel = NotificationChannel(
+                COMPLETION_SILENT_CHANNEL_ID,
+                "Timer Completion (Silent)",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Shows silent completion notifications"
+                setSound(null, null)
+            }
+            notificationManager.createNotificationChannel(completionSilentChannel)
+
+            val completionSoundUri = Uri.parse("android.resource://$packageName/${R.raw.singing_bowl}")
+            // Channel kept for compatibility if users already have it on device.
+            val completionSoundChannel = NotificationChannel(
+                COMPLETION_SOUND_CHANNEL_ID,
+                "Timer Completion (Sound)",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Plays sound on timer completion"
+                setSound(
+                    completionSoundUri,
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+            }
+            notificationManager.createNotificationChannel(completionSoundChannel)
         }
     }
     
@@ -310,7 +348,7 @@ class TimerService : Service() {
             this, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, PROGRESS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(timerName.ifEmpty { "Timer Running" })
             .setContentText("Starting timer...")
@@ -335,7 +373,7 @@ class TimerService : Service() {
             this, 1, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val notificationBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notificationBuilder = NotificationCompat.Builder(this, PROGRESS_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(currentTimerName.ifEmpty { "Timer Running" })
             .setContentText("$timeString - $percentage%")
@@ -380,7 +418,7 @@ class TimerService : Service() {
             this, 2, resetIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notificationBuilder = NotificationCompat.Builder(this, COMPLETION_SILENT_CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentTitle(timerName.ifEmpty { "Progress Complete" })
             .setContentText("Time's up!")
@@ -392,9 +430,36 @@ class TimerService : Service() {
                 "Reset",
                 resetPendingIntent
             )
-            .build()
+            .setSilent(true)
+        val notification = notificationBuilder.build()
         
         notificationManager.notify(DONE_NOTIFICATION_ID, notification)
+    }
+
+    private fun playCompletionSoundThenStopService() {
+        completionMediaPlayer?.release()
+        completionMediaPlayer = null
+
+        val completionSoundUri = Uri.parse("android.resource://$packageName/${R.raw.singing_bowl}")
+        val mediaPlayer = MediaPlayer.create(this, completionSoundUri)
+        if (mediaPlayer == null) {
+            stopTimer()
+            return
+        }
+
+        completionMediaPlayer = mediaPlayer
+        mediaPlayer.setOnCompletionListener {
+            it.release()
+            completionMediaPlayer = null
+            stopTimer()
+        }
+        mediaPlayer.setOnErrorListener { mp, _, _ ->
+            mp.release()
+            completionMediaPlayer = null
+            stopTimer()
+            true
+        }
+        mediaPlayer.start()
     }
     
     private fun broadcastTimerReset() {
@@ -407,6 +472,8 @@ class TimerService : Service() {
         super.onDestroy()
         timerJob?.cancel()
         serviceScope.cancel()
+        completionMediaPlayer?.release()
+        completionMediaPlayer = null
         releaseWakeLock()
         notificationManager.cancel(TIMER_NOTIFICATION_ID)
     }
@@ -425,11 +492,11 @@ class TimerService : Service() {
         const val EXTRA_TIMER_NAME = "timer_name"
         const val EXTRA_TIMER_MODE = "timer_mode"
         
-        private const val CHANNEL_ID = "timer_channel"
+        private const val PROGRESS_CHANNEL_ID = "timer_progress_channel"
+        private const val COMPLETION_SILENT_CHANNEL_ID = "timer_completion_silent_channel"
+        private const val COMPLETION_SOUND_CHANNEL_ID = "timer_completion_sound_channel"
+        private const val KEY_COMPLETION_SOUND_ENABLED = "completion_sound_enabled"
         private const val TIMER_NOTIFICATION_ID = 1
         private const val DONE_NOTIFICATION_ID = 2
     }
 }
-
-
-

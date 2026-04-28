@@ -40,6 +40,7 @@ data class TimerState(
     val minutes: Int = 30, // Default to 1 hour 30 minutes for duration mode
     val timerName: String = "",
     val timerMode: String = "duration", // "duration" or "target_time"
+    val isCompletionSoundEnabled: Boolean = false,
     val targetHour: Int = getCurrentHour(), // Default to current time for time mode
     val targetMinute: Int = getCurrentMinute(), // Default to current time for time mode
     val isScheduled: Boolean = false,
@@ -194,6 +195,14 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
     fun setTargetTime(hour: Int, minute: Int) {
         _uiState.value = _uiState.value.copy(targetHour = hour, targetMinute = minute)
         saveTimerSettings()
+    }
+
+    fun toggleCompletionSoundEnabled() {
+        val updatedValue = !_uiState.value.isCompletionSoundEnabled
+        _uiState.value = _uiState.value.copy(isCompletionSoundEnabled = updatedValue)
+        sharedPreferences.edit()
+            .putBoolean(KEY_COMPLETION_SOUND_ENABLED, updatedValue)
+            .apply()
     }
     
     fun startTimer() {
@@ -550,6 +559,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(
             timerName = timerName,
             timerMode = timerMode,
+            isCompletionSoundEnabled = sharedPreferences.getBoolean(KEY_COMPLETION_SOUND_ENABLED, false),
             hours = hours,
             minutes = minutes,
             targetHour = targetHour,
@@ -579,6 +589,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
                 putExtra(TimerService.EXTRA_REMAINING_TIME, remainingTime)
                 putExtra(TimerService.EXTRA_TOTAL_TIME, totalTime)
                 putExtra(TimerService.EXTRA_TIMER_NAME, timerName)
+                putExtra(TimerService.EXTRA_TIMER_MODE, timerMode)
             }
 
             ContextCompat.startForegroundService(context, intent)
@@ -639,6 +650,7 @@ class TimerViewModel(application: Application) : AndroidViewModel(application) {
         private const val KEY_SCHEDULED_DURATION = "scheduled_duration"
         private const val KEY_SCHEDULED_TIMER_NAME = "scheduled_timer_name"
         private const val KEY_SCHEDULED_TIMER_MODE = "scheduled_timer_mode"
+        private const val KEY_COMPLETION_SOUND_ENABLED = "completion_sound_enabled"
         private const val SCHEDULED_TIMER_REQUEST_CODE = 1001
     }
 }
